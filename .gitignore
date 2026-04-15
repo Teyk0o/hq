@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+
+# Runtime state (never versioned)
+.hq/db.sqlite
+.hq/db.sqlite-journal
+.hq/db.sqlite-wal
+.hq/db.sqlite-shm
+.hq/logs/
+.hq/progress/
+.hq/worktrees/
+.hq/runtime/
+
+# Env
+.env
+.env.local

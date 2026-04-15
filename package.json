@@ -1,0 +1,26 @@
+{
+  "name": "hq",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Autonomous agent teams orchestrator — local Trello + live kanban + tmux-driven Claude Code sessions",
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}
