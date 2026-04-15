@@ -2,6 +2,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { writeClaudeSettings } from './claude-settings';
 
 async function run(
   cmd: string,
@@ -66,6 +67,7 @@ export async function ensureWorktree(args: {
   }
 
   await writeMcpConfig(worktreePath, projectPath, agentName);
+  await writeClaudeSettings(worktreePath, projectPath, agentName);
   return { isGitWorktree };
 }
 

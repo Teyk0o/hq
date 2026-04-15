@@ -1,2 +1,2 @@
-jsx = "automatic"
+jsx = "react-jsx"
 jsxImportSource = "hono/jsx"

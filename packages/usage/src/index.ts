@@ -1,11 +1,13 @@
 export * from './types';
 export * from './ccusage';
 export * from './cache';
+export { probeUsageViaTmux, parseUsageOutput } from './probe';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_MAX_LIMITS, normalise, runCcusage, type PlanLimits } from './ccusage';
 import { isCacheFresh, readCache, writeCache } from './cache';
+import { probeUsageViaTmux } from './probe';
 import type { UsageSnapshot } from './types';
 
 export const DEFAULT_CACHE_PATH = join(homedir(), '.hq', 'usage-cache.json');
@@ -17,7 +19,12 @@ export interface FetchOptions {
   force?: boolean;
 }
 
-/** Fetch a fresh snapshot, honouring the on-disk cache unless `force` is true. */
+/**
+ * Fetch a fresh snapshot. Strategy:
+ *   1. Honour the on-disk cache unless `force`.
+ *   2. Probe Claude Code's `/usage` via an ephemeral tmux session (exact figures).
+ *   3. Fall back to ccusage with heuristic limits (less accurate but always works).
+ */
 export async function fetchUsage(options: FetchOptions = {}): Promise<UsageSnapshot> {
   const {
     cachePath = DEFAULT_CACHE_PATH,
@@ -31,8 +38,15 @@ export async function fetchUsage(options: FetchOptions = {}): Promise<UsageSnaps
     if (cached && isCacheFresh(cached)) return cached.snapshot;
   }
 
-  const raw = await runCcusage();
-  const snapshot = normalise(raw, limits);
+  let snapshot: UsageSnapshot;
+  try {
+    snapshot = await probeUsageViaTmux();
+  } catch (err) {
+    console.warn('[usage] probe failed, falling back to ccusage:', (err as Error).message);
+    const raw = await runCcusage();
+    snapshot = normalise(raw, limits);
+  }
+
   await writeCache(cachePath, snapshot, ttlMs);
   return snapshot;
 }

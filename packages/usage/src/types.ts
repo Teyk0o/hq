@@ -6,7 +6,7 @@ export interface UsageSnapshot {
   week_sonnet_pct: number;
   week_sonnet_resets_at: number | null;
   fetched_at: number;
-  source: 'ccusage' | 'stub';
+  source: 'probe' | 'ccusage' | 'stub';
 }
 
 export interface UsageCacheFile {

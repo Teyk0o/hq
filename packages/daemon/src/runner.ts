@@ -11,6 +11,7 @@ import {
 } from '@hq/core';
 import { and, eq, isNull } from 'drizzle-orm';
 import { buildHeartbeatPrompt } from './heartbeat';
+import { buildClaudeLaunchCommand, isBwrapAvailable } from './sandbox';
 import * as tmux from './tmux';
 import { ensureWorktree } from './worktree';
 
@@ -50,7 +51,15 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
   if (!sessionExisted) {
     await tmux.create(session, worktreeDir);
     await tmux.pipePane(session, logPath);
-    await tmux.sendKeys(session, 'claude', { enter: true });
+    const bwrapOk = await isBwrapAvailable();
+    if (project.sandbox.enabled && !bwrapOk) {
+      console.warn(
+        '[runner] bwrap not found on PATH — falling back to non-sandboxed claude. ' +
+          'Install bubblewrap (apt install bubblewrap) for proper isolation.',
+      );
+    }
+    const launchCmd = buildClaudeLaunchCommand(worktreeDir, project.sandbox, bwrapOk);
+    await tmux.sendKeys(session, launchCmd, { enter: true });
     // Let claude's TUI initialise. This is best-effort; a sentinel-based wait is a future improvement.
     await sleep(3000);
   } else {

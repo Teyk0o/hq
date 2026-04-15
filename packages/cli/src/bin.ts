@@ -8,6 +8,7 @@ import {
   agentRestore,
   agentRun,
 } from './commands/agent';
+import { bashGateCommand } from './commands/bash-gate';
 import { daemonInstallService, daemonStart } from './commands/daemon';
 import { initCommand } from './commands/init';
 import { mcpCommand } from './commands/mcp';
@@ -105,6 +106,14 @@ program
   .requiredOption('--project <path>')
   .requiredOption('--agent <name>')
   .action(async (opts: { project: string; agent: string }) => mcpCommand(opts));
+
+// Bash gate (internal, invoked by Claude Code PreToolUse hook)
+program
+  .command('bash-gate')
+  .description('Validate a Bash tool call against the project whitelist (hook usage)')
+  .requiredOption('--project <path>')
+  .requiredOption('--agent <name>')
+  .action(async (opts: { project: string; agent: string }) => bashGateCommand(opts));
 
 program.parseAsync().catch((err) => {
   console.error(err);

@@ -41,6 +41,39 @@ export const ProjectConfigSchema = z.object({
       discord_events: z.array(z.string()).default([]),
     })
     .default({}),
+  sandbox: z
+    .object({
+      enabled: z.boolean().default(true),
+      share_net: z.boolean().default(true),
+      extra_binds: z.array(z.string()).default([]),
+      extra_ro_binds: z.array(z.string()).default([]),
+    })
+    .default({}),
+  bash: z
+    .object({
+      allow_prefixes: z
+        .array(z.string())
+        .default([
+          'git ', 'make ', 'bun ', 'npm ', 'pnpm ', 'node ', 'tsc',
+          'ls', 'cat ', 'grep ', 'rg ', 'find ', 'mkdir ', 'touch ',
+          'echo ', 'cp ', 'mv ', 'sed ', 'awk ', 'head ', 'tail ',
+          'which ', 'pwd', 'env', 'diff ',
+        ]),
+      deny_patterns: z
+        .array(z.string())
+        .default([
+          'rm -rf /',
+          'sudo ',
+          'chmod 777',
+          '\\| *sh\\b',
+          'dd if=',
+          'mkfs',
+          ':\\(\\)\\{',
+          'curl [^|]*\\| *(ba)?sh',
+          'wget [^|]*\\| *(ba)?sh',
+        ]),
+    })
+    .default({}),
   goals: z
     .array(
       z.object({
