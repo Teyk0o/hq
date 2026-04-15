@@ -6,32 +6,45 @@ import {
   activity as activityTable,
   newId,
 } from '@hq/core';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { McpContext } from '../context';
 
 export async function startHeartbeat(ctx: McpContext): Promise<{ heartbeat_id: string }> {
   if (ctx.currentHeartbeatId) {
     return { heartbeat_id: ctx.currentHeartbeatId };
   }
-  const id = newId();
-  const startedAt = Date.now();
-  const logDir = join(ctx.projectPath, '.hq', 'logs', ctx.agentName);
-  await mkdir(logDir, { recursive: true });
-  const logPath = join(logDir, `${new Date(startedAt).toISOString().replace(/[:.]/g, '-')}.log`);
 
-  ctx.db
-    .insert(heartbeatsTable)
-    .values({
-      id,
-      agent: ctx.agentName,
-      startedAt,
-      logPath,
-    })
-    .run();
+  // Prefer re-using the row the daemon pre-created when it triggered us. This
+  // avoids a duplicate row per heartbeat and keeps the log_path consistent.
+  const openRow = ctx.db
+    .select()
+    .from(heartbeatsTable)
+    .where(and(eq(heartbeatsTable.agent, ctx.agentName), isNull(heartbeatsTable.endedAt)))
+    .orderBy(desc(heartbeatsTable.startedAt))
+    .limit(1)
+    .get();
+
+  let id: string;
+  if (openRow) {
+    id = openRow.id;
+  } else {
+    id = newId();
+    const startedAt = Date.now();
+    const logDir = join(ctx.projectPath, '.hq', 'logs', ctx.agentName);
+    await mkdir(logDir, { recursive: true });
+    const logPath = join(
+      logDir,
+      `${new Date(startedAt).toISOString().replace(/[:.]/g, '-')}.log`,
+    );
+    ctx.db
+      .insert(heartbeatsTable)
+      .values({ id, agent: ctx.agentName, startedAt, logPath })
+      .run();
+  }
 
   ctx.db
     .update(agentState)
-    .set({ status: 'working', lastHeartbeat: startedAt })
+    .set({ status: 'working', lastHeartbeat: Date.now() })
     .where(eq(agentState.name, ctx.agentName))
     .run();
 

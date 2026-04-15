@@ -22,7 +22,10 @@ export async function create(
   cwd: string,
   command?: string,
 ): Promise<void> {
-  const args = ['new-session', '-d', '-s', session, '-c', cwd];
+  // Default tmux detached sessions are 80x24 which is too narrow for Claude's
+  // TUI — it blocks on terminal capability queries that never resolve without
+  // a client attached. Forcing a larger geometry lets Ink render even detached.
+  const args = ['new-session', '-d', '-s', session, '-x', '200', '-y', '50', '-c', cwd];
   if (command) args.push(command);
   const { code, stderr } = await run(args);
   if (code !== 0) throw new Error(`tmux new-session failed: ${stderr.trim()}`);
