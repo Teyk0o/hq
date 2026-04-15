@@ -17,8 +17,14 @@ export async function exists(session: string): Promise<boolean> {
   return code === 0;
 }
 
-export async function create(session: string, cwd: string): Promise<void> {
-  const { code, stderr } = await run(['new-session', '-d', '-s', session, '-c', cwd]);
+export async function create(
+  session: string,
+  cwd: string,
+  command?: string,
+): Promise<void> {
+  const args = ['new-session', '-d', '-s', session, '-c', cwd];
+  if (command) args.push(command);
+  const { code, stderr } = await run(args);
   if (code !== 0) throw new Error(`tmux new-session failed: ${stderr.trim()}`);
 }
 
@@ -56,14 +62,51 @@ export async function sendCtrlC(session: string): Promise<void> {
 }
 
 /**
- * Send a multi-line prompt safely. Each line is sent with -l (literal), then an
- * Enter keypress terminates the input. This avoids shell interpretation issues.
+ * Send a multi-line prompt to a Claude Code TUI session via bracketed paste.
+ * This is critical: Claude's TUI treats newlines inside a bracketed paste as
+ * literal line breaks in the same input, while plain send-keys with Enter would
+ * submit each line as a separate turn. `paste-buffer -p` wraps the buffer in
+ * ESC[200~ / ESC[201~ which the TUI recognises.
  */
 export async function sendPrompt(session: string, text: string): Promise<void> {
-  for (const line of text.split('\n')) {
-    await sendKeys(session, line, { literal: true });
-    await sendKeys(session, 'Enter');
-  }
+  const bufferName = `hq-prompt-${Date.now()}`;
+  const { code: setCode, stderr: setErr } = await runWithStdin(
+    ['set-buffer', '-b', bufferName, '-'],
+    text,
+  );
+  if (setCode !== 0) throw new Error(`tmux set-buffer failed: ${setErr.trim()}`);
+
+  const { code: pasteCode, stderr: pasteErr } = await run([
+    'paste-buffer',
+    '-t',
+    session,
+    '-b',
+    bufferName,
+    '-p',
+    '-d',
+  ]);
+  if (pasteCode !== 0) throw new Error(`tmux paste-buffer failed: ${pasteErr.trim()}`);
+
+  // Submit the prompt. Claude accepts Enter to submit when the composer has
+  // content; bracketed paste keeps the multiline structure intact.
+  await sendKeys(session, 'Enter');
+}
+
+async function runWithStdin(
+  args: string[],
+  stdin: string,
+): Promise<{ stdout: string; stderr: string; code: number }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('tmux', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout?.on('data', (d: Buffer) => (stdout += d.toString()));
+    proc.stderr?.on('data', (d: Buffer) => (stderr += d.toString()));
+    proc.on('error', reject);
+    proc.on('close', (code) => resolve({ stdout, stderr, code: code ?? 0 }));
+    proc.stdin?.write(stdin);
+    proc.stdin?.end();
+  });
 }
 
 export function sessionName(projectSlug: string, agent: string): string {

@@ -49,8 +49,6 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
 
   const sessionExisted = await tmux.exists(session);
   if (!sessionExisted) {
-    await tmux.create(session, worktreeDir);
-    await tmux.pipePane(session, logPath);
     const bwrapOk = await isBwrapAvailable();
     if (project.sandbox.enabled && !bwrapOk) {
       console.warn(
@@ -59,9 +57,13 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
       );
     }
     const launchCmd = buildClaudeLaunchCommand(worktreeDir, project.sandbox, bwrapOk);
-    await tmux.sendKeys(session, launchCmd, { enter: true });
-    // Let claude's TUI initialise. This is best-effort; a sentinel-based wait is a future improvement.
-    await sleep(3000);
+    // Launch claude as the tmux pane's root command (not inside a shell) so that
+    // send-keys to this pane goes directly to claude instead of being mangled by
+    // the user's interactive shell autosuggest/highlighting.
+    await tmux.create(session, worktreeDir, launchCmd);
+    await tmux.pipePane(session, logPath);
+    // Let claude's TUI initialise.
+    await sleep(3500);
   } else {
     // Re-wire pipe-pane to a fresh log file for this heartbeat.
     await tmux.pipePane(session, logPath);

@@ -31,6 +31,10 @@ export function buildClaudeLaunchCommand(
     return `claude --dangerously-skip-permissions`;
   }
   const home = homedir();
+  // Mount order matters: --tmpfs wipes whatever was mounted there before.
+  // We declare the top-level layout first (ro-bind / /, tmpfs /tmp) then overlay
+  // writable binds on top. bwrap creates the intermediate directories on the
+  // tmpfs when a bind destination points inside it.
   const parts: string[] = [
     'bwrap',
     '--unshare-user',
@@ -40,11 +44,11 @@ export function buildClaudeLaunchCommand(
     '--unshare-cgroup',
     cfg.share_net ? '--share-net' : '--unshare-net',
     '--ro-bind', '/', '/',
-    '--bind', worktree, worktree,
-    '--bind', `${home}/.claude`, `${home}/.claude`,
     '--tmpfs', '/tmp',
     '--dev-bind', '/dev', '/dev',
     '--proc', '/proc',
+    '--bind', worktree, worktree,
+    '--bind', `${home}/.claude`, `${home}/.claude`,
     '--die-with-parent',
     '--chdir', worktree,
     '--setenv', 'HOME', home,
