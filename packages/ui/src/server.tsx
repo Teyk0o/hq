@@ -5,16 +5,21 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { HQEvent } from '@hq/core';
 import { getSharedBus } from '@hq/mcp';
-import { Kanban, TaskDrawer, UsageWidget, ActivityFeed, AgentsList } from './views';
-import { Layout } from './layout';
+import {
+  ActivityFeed,
+  AgentsList,
+  Kanban,
+  SidebarAgents,
+  TaskDrawer,
+  UsageWidget,
+} from './views';
 import type { KanbanTask } from './views';
+import { Layout } from './layout';
 
 export interface UiServerOptions {
   host?: string;
   port?: number;
-  /** Map of project name → absolute path, populated from the registry at startup. */
   projects: Record<string, string>;
-  /** Initial project shown if none specified. */
   defaultProject: string;
 }
 
@@ -36,24 +41,24 @@ export function createApp(options: UiServerOptions): Hono {
     return options.defaultProject;
   };
 
-  app.get('/', (c) => c.redirect('/board'));
-
   const renderBoard = (project: string) => {
     const db = openDb(project);
     const tasks = db
       .prepare(
         `SELECT id, title, status, assignee, priority, package FROM tasks
-         WHERE status != 'done' ORDER BY priority, created_at DESC`,
+         ORDER BY priority, created_at DESC`,
       )
       .all() as KanbanTask[];
     db.close();
     return <Kanban tasks={tasks} project={project} />;
   };
 
+  app.get('/', (c) => c.redirect(`/board?project=${options.defaultProject}`));
+
   app.get('/board', (c) => {
     const project = currentProject(c.req.raw);
     return c.html(
-      <Layout project={project} projects={projectNames}>
+      <Layout project={project} projects={projectNames} title="Board" page="board">
         <div
           id="board"
           hx-get={`/board/inner?project=${project}`}
@@ -76,13 +81,21 @@ export function createApp(options: UiServerOptions): Hono {
     const id = c.req.param('id');
     const project = currentProject(c.req.raw);
     const db = openDb(project);
-    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as KanbanTask | null;
+    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as
+      | (KanbanTask & { description?: string; branch?: string | null })
+      | null;
     if (!task) {
       db.close();
       return c.notFound();
     }
-    const comments = db.prepare('SELECT * FROM comments WHERE task_id = ? ORDER BY created_at').all(id);
-    const reviews = db.prepare('SELECT * FROM reviews WHERE task_id = ? ORDER BY created_at').all(id);
+    const comments = db
+      .prepare('SELECT author, body, created_at FROM comments WHERE task_id = ? ORDER BY created_at')
+      .all(id) as Array<{ author: string; body: string; created_at: number }>;
+    const reviews = db
+      .prepare(
+        'SELECT reviewer, verdict, body, created_at FROM reviews WHERE task_id = ? ORDER BY created_at',
+      )
+      .all(id) as Array<{ reviewer: string; verdict: string; body: string; created_at: number }>;
     db.close();
     return c.html(<TaskDrawer task={task} comments={comments} reviews={reviews} />);
   });
@@ -93,11 +106,19 @@ export function createApp(options: UiServerOptions): Hono {
     const project = currentProject(c.req.raw);
     const db = openDb(project);
     const items = db
-      .prepare('SELECT agent, action, created_at, details FROM activity ORDER BY created_at DESC LIMIT 200')
-      .all() as Array<{ agent: string; action: string; created_at: number; details: string }>;
+      .prepare(
+        'SELECT agent, action, created_at, details, task_id FROM activity ORDER BY created_at DESC LIMIT 200',
+      )
+      .all() as Array<{
+      agent: string;
+      action: string;
+      created_at: number;
+      details: string;
+      task_id: string | null;
+    }>;
     db.close();
     return c.html(
-      <Layout project={project} projects={projectNames} title="Activity — HQ">
+      <Layout project={project} projects={projectNames} title="Activity" page="activity">
         <ActivityFeed items={items} />
       </Layout>,
     );
@@ -107,17 +128,35 @@ export function createApp(options: UiServerOptions): Hono {
     const project = currentProject(c.req.raw);
     const db = openDb(project);
     const agents = db
-      .prepare('SELECT name, status, last_heartbeat FROM agent_state')
-      .all() as Array<{ name: string; status: string; last_heartbeat: number | null }>;
+      .prepare(
+        'SELECT name, status, last_heartbeat, current_task_id, tokens_today, tokens_budget FROM agent_state ORDER BY name',
+      )
+      .all() as Array<{
+      name: string;
+      status: string;
+      last_heartbeat: number | null;
+      current_task_id: string | null;
+      tokens_today: number;
+      tokens_budget: number;
+    }>;
     db.close();
     return c.html(
-      <Layout project={project} projects={projectNames} title="Agents — HQ">
+      <Layout project={project} projects={projectNames} title="Agents" page="agents">
         <AgentsList agents={agents} />
       </Layout>,
     );
   });
 
-  // Usage widget — rendered HTML, refreshed via hx-trigger="sse:claude.usage_updated".
+  app.get('/agents/sidebar', (c) => {
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const agents = db
+      .prepare(`SELECT name, status FROM agent_state WHERE status != 'archived' ORDER BY name`)
+      .all() as Array<{ name: string; status: string }>;
+    db.close();
+    return c.html(<SidebarAgents agents={agents} />);
+  });
+
   app.get('/usage/widget', async (c) => {
     try {
       const { fetchUsage } = await import('@hq/usage');
@@ -128,23 +167,34 @@ export function createApp(options: UiServerOptions): Hono {
     }
   });
 
-  // SSE stream.
+  // SSE stream
   app.get('/events', (c) => {
-    const project = currentProject(c.req.raw);
     return streamSSE(c, async (stream) => {
       const unsubscribe = bus.subscribe((event: HQEvent) => {
         void stream.writeSSE({
           event: event.type,
-          data: JSON.stringify({ ...event, project }),
+          data: JSON.stringify(event),
         });
       });
       c.req.raw.signal.addEventListener('abort', unsubscribe);
-      // Keep alive.
       while (!c.req.raw.signal.aborted) {
-        await stream.sleep(30_000);
+        await stream.sleep(25_000);
         void stream.writeSSE({ event: 'ping', data: String(Date.now()) });
       }
     });
+  });
+
+  // Cross-process event ingestion. MCP servers running inside agent sandboxes
+  // POST HQEvent JSON here; we re-publish on the local bus so SSE subscribers
+  // (the dashboard) receive them.
+  app.post('/api/events', async (c) => {
+    try {
+      const event = (await c.req.json()) as HQEvent;
+      bus.publish(event);
+    } catch {
+      return c.json({ error: 'invalid payload' }, 400);
+    }
+    return c.body(null, 204);
   });
 
   // Human actions
@@ -152,10 +202,9 @@ export function createApp(options: UiServerOptions): Hono {
     const id = c.req.param('id');
     const project = currentProject(c.req.raw);
     const db = openDb(project);
-    db.prepare(`UPDATE tasks SET status = 'approved', updated_at = ? WHERE id = ? AND status = 'review'`).run(
-      Date.now(),
-      id,
-    );
+    db.prepare(
+      `UPDATE tasks SET status = 'approved', updated_at = ? WHERE id = ? AND status = 'review'`,
+    ).run(Date.now(), id);
     db.close();
     bus.publish({
       type: 'task.status_changed',
@@ -198,18 +247,15 @@ export function createApp(options: UiServerOptions): Hono {
       db.close();
       return c.json({ error: 'task not pushable' }, 400);
     }
-    // Best-effort git push from the project root.
     const proc = Bun.spawn(['git', 'push', '-u', 'origin', task.branch], {
       cwd: projectPath,
       stdout: 'pipe',
       stderr: 'pipe',
     });
     await proc.exited;
-    db.prepare(`UPDATE tasks SET status = 'done', pushed = 1, completed_at = ?, updated_at = ? WHERE id = ?`).run(
-      Date.now(),
-      Date.now(),
-      id,
-    );
+    db.prepare(
+      `UPDATE tasks SET status = 'done', pushed = 1, completed_at = ?, updated_at = ? WHERE id = ?`,
+    ).run(Date.now(), Date.now(), id);
     db.close();
     bus.publish({ type: 'task.pushed', task_id: id, branch: task.branch });
     bus.publish({
@@ -223,7 +269,6 @@ export function createApp(options: UiServerOptions): Hono {
   });
 
   app.post('/api/daemon/pause', (c) => {
-    // The daemon listens to this via bus in-process.
     bus.publish({ type: 'daemon.quota_paused', week_all_pct: 0 });
     return c.body(null, 204);
   });
@@ -237,7 +282,6 @@ export async function startUi(options: UiServerOptions): Promise<void> {
   const port = options.port ?? 7433;
   Bun.serve({ fetch: app.fetch, hostname: host, port, idleTimeout: 255 });
   console.log(`[ui] http://${host}:${port}`);
-  // Push an initial usage snapshot via the bus so the widget renders something.
   void (async () => {
     try {
       const { fetchUsage } = await import('@hq/usage');
@@ -249,9 +293,7 @@ export async function startUi(options: UiServerOptions): Promise<void> {
         week_sonnet_pct: snap.week_sonnet_pct,
       });
     } catch {
-      // non-fatal; widget stays in loading state
+      // non-fatal
     }
   })();
-  // Keep reference for tree-shaking of the widget renderer; otherwise unused.
-  void UsageWidget;
 }

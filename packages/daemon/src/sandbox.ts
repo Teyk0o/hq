@@ -29,9 +29,11 @@ export function buildClaudeLaunchCommand(
   cfg: ProjectConfig['sandbox'],
   bwrapAvailable: boolean,
   projectRoot: string,
+  eventSinkUrl?: string,
 ): string {
   if (!cfg.enabled || !bwrapAvailable) {
-    return `claude --dangerously-skip-permissions`;
+    const prefix = eventSinkUrl ? `HQ_EVENT_SINK_URL=${shellQuote(eventSinkUrl)} ` : '';
+    return `${prefix}claude --dangerously-skip-permissions`;
   }
   const home = homedir();
   // Mount order matters: --tmpfs wipes whatever was mounted there before.
@@ -64,6 +66,9 @@ export function buildClaudeLaunchCommand(
     '--setenv', 'HOME', home,
     '--setenv', 'TERM', 'xterm-256color',
   ];
+  if (eventSinkUrl) {
+    parts.push('--setenv', 'HQ_EVENT_SINK_URL', eventSinkUrl);
+  }
   for (const p of cfg.extra_binds) {
     parts.push('--bind', p, p);
   }
