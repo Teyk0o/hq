@@ -83,17 +83,22 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
     await tmux.pipePane(session, logPath);
   }
 
-  // Hybrid session mode: if the agent has no active task, /clear first.
-  const hasActiveTask =
-    options.db
-      .select()
-      .from(tasksTable)
-      .where(and(eq(tasksTable.assignee, options.agentName), eq(tasksTable.status, 'in_progress')))
-      .limit(1)
-      .all().length > 0;
-  if (!hasActiveTask) {
-    await tmux.sendKeys(session, '/clear', { enter: true });
-    await sleep(500);
+  // Hybrid session mode: on a reused session, reset context when the agent
+  // has no active task. A freshly-spawned Claude starts with an empty context
+  // already, and sending /clear to its still-initialising TUI has been
+  // observed to wedge the pane (keystrokes corrupt the Ink startup handshake).
+  if (sessionExisted) {
+    const hasActiveTask =
+      options.db
+        .select()
+        .from(tasksTable)
+        .where(and(eq(tasksTable.assignee, options.agentName), eq(tasksTable.status, 'in_progress')))
+        .limit(1)
+        .all().length > 0;
+    if (!hasActiveTask) {
+      await tmux.sendKeys(session, '/clear', { enter: true });
+      await sleep(500);
+    }
   }
 
   const timeoutMinutes =
