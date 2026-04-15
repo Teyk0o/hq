@@ -90,8 +90,10 @@ export async function sendPrompt(session: string, text: string): Promise<void> {
   ]);
   if (pasteCode !== 0) throw new Error(`tmux paste-buffer failed: ${pasteErr.trim()}`);
 
-  // Submit the prompt. Claude accepts Enter to submit when the composer has
-  // content; bracketed paste keeps the multiline structure intact.
+  // Give Claude's ink-input a moment to finalise the bracketed-paste block
+  // before we issue the submit keypress. Without this delay the Enter is
+  // sometimes swallowed as "still part of the paste".
+  await new Promise((r) => setTimeout(r, 400));
   await sendKeys(session, 'Enter');
 }
 
