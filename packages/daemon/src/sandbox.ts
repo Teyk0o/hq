@@ -49,6 +49,10 @@ export function buildClaudeLaunchCommand(
     '--proc', '/proc',
     '--bind', worktree, worktree,
     '--bind', `${home}/.claude`, `${home}/.claude`,
+    // ~/.claude.json is a sibling file (not inside ~/.claude/). Claude Code writes
+    // to it to persist trust/onboarding state; without a writable bind, the TUI
+    // hangs silently on its first write attempt.
+    '--bind-try', `${home}/.claude.json`, `${home}/.claude.json`,
     '--die-with-parent',
     '--chdir', worktree,
     '--setenv', 'HOME', home,
