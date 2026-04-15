@@ -13,6 +13,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { buildHeartbeatPrompt } from './heartbeat';
 import { buildClaudeLaunchCommand, isBwrapAvailable } from './sandbox';
 import * as tmux from './tmux';
+import { preApproveTrust } from './trust';
 import { ensureWorktree } from './worktree';
 
 export interface RunHeartbeatOptions {
@@ -41,6 +42,9 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
     agentName: options.agentName,
     branchPrefix: project.git.branch_prefix,
   });
+  // Claude Code prompts a trust dialog on first access to a new directory.
+  // Pre-accept it so the TUI doesn't hang waiting for input from our headless daemon.
+  await preApproveTrust(worktreeDir);
 
   const logDir = join(options.projectPath, '.hq', 'logs', options.agentName);
   await mkdir(logDir, { recursive: true });
