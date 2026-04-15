@@ -9,6 +9,7 @@ import {
   agentRun,
 } from './commands/agent';
 import { bashGateCommand } from './commands/bash-gate';
+import { debugReset, debugTest } from './commands/debug';
 import { daemonInstallService, daemonStart } from './commands/daemon';
 import { initCommand } from './commands/init';
 import { mcpCommand } from './commands/mcp';
@@ -106,6 +107,23 @@ program
   .requiredOption('--project <path>')
   .requiredOption('--agent <name>')
   .action(async (opts: { project: string; agent: string }) => mcpCommand(opts));
+
+// Debug helpers
+const debug = program.command('debug').description('Debug helpers for development');
+debug
+  .command('reset')
+  .description('Kill tmux sessions, prune worktrees/branches, wipe runtime state')
+  .option('--all', 'also unregister projects and wipe usage cache')
+  .action(async (opts: { all?: boolean }) => debugReset(opts));
+debug
+  .command('test')
+  .description('Reset + scaffold a fresh project with one agent and one task, then trigger a heartbeat')
+  .option('--path <path>', 'override project path (default: /tmp/hq-test-<rand>)')
+  .option('--agent <name>', 'agent name (default: alice)')
+  .option('--role <role>', 'agent role (default: worker)')
+  .option('--task <title>', 'task title (default: create hello.txt)')
+  .option('--no-run', 'scaffold without triggering a heartbeat')
+  .action(async (opts) => debugTest(opts));
 
 // Bash gate (internal, invoked by Claude Code PreToolUse hook)
 program
