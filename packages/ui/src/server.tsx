@@ -28,15 +28,17 @@ export function createApp(options: UiServerOptions): Hono {
     return new Database(join(path, '.hq', 'db.sqlite'));
   };
 
+  const projectNames = Object.keys(options.projects);
   const currentProject = (req: Request): string => {
     const url = new URL(req.url);
-    return url.searchParams.get('project') ?? options.defaultProject;
+    const requested = url.searchParams.get('project');
+    if (requested && projectNames.includes(requested)) return requested;
+    return options.defaultProject;
   };
 
   app.get('/', (c) => c.redirect('/board'));
 
-  app.get('/board', (c) => {
-    const project = currentProject(c.req.raw);
+  const renderBoard = (project: string) => {
     const db = openDb(project);
     const tasks = db
       .prepare(
@@ -45,12 +47,29 @@ export function createApp(options: UiServerOptions): Hono {
       )
       .all() as KanbanTask[];
     db.close();
+    return <Kanban tasks={tasks} project={project} />;
+  };
+
+  app.get('/board', (c) => {
+    const project = currentProject(c.req.raw);
     return c.html(
-      <Layout project={project}>
-        <Kanban tasks={tasks} project={project} />
+      <Layout project={project} projects={projectNames}>
+        <div
+          id="board"
+          hx-get={`/board/inner?project=${project}`}
+          hx-trigger="sse:task.status_changed from:body, sse:task.created from:body, sse:task.claimed from:body, sse:task.commented from:body, sse:task.reviewed from:body, sse:task.blocked from:body, sse:task.unblocked from:body, sse:task.pushed from:body"
+          hx-swap="innerHTML"
+        >
+          {renderBoard(project)}
+        </div>
         <div id="drawer" />
       </Layout>,
     );
+  });
+
+  app.get('/board/inner', (c) => {
+    const project = currentProject(c.req.raw);
+    return c.html(renderBoard(project));
   });
 
   app.get('/task/:id', (c) => {
@@ -78,7 +97,7 @@ export function createApp(options: UiServerOptions): Hono {
       .all() as Array<{ agent: string; action: string; created_at: number; details: string }>;
     db.close();
     return c.html(
-      <Layout project={project} title="Activity — HQ">
+      <Layout project={project} projects={projectNames} title="Activity — HQ">
         <ActivityFeed items={items} />
       </Layout>,
     );
@@ -92,10 +111,21 @@ export function createApp(options: UiServerOptions): Hono {
       .all() as Array<{ name: string; status: string; last_heartbeat: number | null }>;
     db.close();
     return c.html(
-      <Layout project={project} title="Agents — HQ">
+      <Layout project={project} projects={projectNames} title="Agents — HQ">
         <AgentsList agents={agents} />
       </Layout>,
     );
+  });
+
+  // Usage widget — rendered HTML, refreshed via hx-trigger="sse:claude.usage_updated".
+  app.get('/usage/widget', async (c) => {
+    try {
+      const { fetchUsage } = await import('@hq/usage');
+      const snap = await fetchUsage();
+      return c.html(<UsageWidget snap={snap} />);
+    } catch {
+      return c.html(<UsageWidget snap={null} />);
+    }
   });
 
   // SSE stream.
@@ -205,7 +235,7 @@ export async function startUi(options: UiServerOptions): Promise<void> {
   const app = createApp(options);
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 7433;
-  Bun.serve({ fetch: app.fetch, hostname: host, port });
+  Bun.serve({ fetch: app.fetch, hostname: host, port, idleTimeout: 255 });
   console.log(`[ui] http://${host}:${port}`);
   // Push an initial usage snapshot via the bus so the widget renders something.
   void (async () => {

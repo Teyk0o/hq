@@ -1,9 +1,16 @@
 /** @jsxImportSource hono/jsx */
 import type { FC, PropsWithChildren } from 'hono/jsx';
 
-export const Layout: FC<PropsWithChildren<{ title?: string; project?: string }>> = ({
+export interface LayoutProps {
+  title?: string;
+  project?: string;
+  projects?: string[];
+}
+
+export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
   title = 'HQ',
   project,
+  projects = [],
   children,
 }) => (
   <html lang="en">
@@ -24,6 +31,18 @@ export const Layout: FC<PropsWithChildren<{ title?: string; project?: string }>>
       `,
         }}
       />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+        // Project switcher: reload to the selected project, preserving the current path.
+        function hqSwitchProject(name){
+          const url = new URL(window.location.href);
+          url.searchParams.set('project', name);
+          window.location.href = url.toString();
+        }
+      `,
+        }}
+      />
     </head>
     <body
       class="bg-zinc-950 text-zinc-100 min-h-screen"
@@ -31,15 +50,33 @@ export const Layout: FC<PropsWithChildren<{ title?: string; project?: string }>>
       sse-connect={`/events${project ? `?project=${project}` : ''}`}
     >
       <header class="border-b border-zinc-800 px-4 py-2 flex items-center gap-4">
-        <a href="/" class="font-bold text-lg">
+        <a href={`/board?project=${project ?? ''}`} class="font-bold text-lg">
           HQ
         </a>
+        {projects.length > 1 && (
+          <select
+            class="bg-zinc-800 text-sm rounded px-2 py-1"
+            onchange="hqSwitchProject(this.value)"
+          >
+            {projects.map((p) => (
+              <option value={p} selected={p === project}>
+                {p}
+              </option>
+            ))}
+          </select>
+        )}
         <nav class="flex gap-3 text-sm text-zinc-400">
-          <a href="/board" class="hover:text-white">Board</a>
-          <a href="/agents" class="hover:text-white">Agents</a>
-          <a href="/activity" class="hover:text-white">Activity</a>
+          <a href={`/board?project=${project ?? ''}`} class="hover:text-white">Board</a>
+          <a href={`/agents?project=${project ?? ''}`} class="hover:text-white">Agents</a>
+          <a href={`/activity?project=${project ?? ''}`} class="hover:text-white">Activity</a>
         </nav>
-        <div class="ml-auto flex items-center gap-4 text-xs" id="usage-widget" sse-swap="claude.usage_updated">
+        <div
+          class="ml-auto flex items-center gap-2 text-xs"
+          id="usage-widget"
+          hx-get="/usage/widget"
+          hx-trigger="load, sse:claude.usage_updated from:body"
+          hx-swap="innerHTML"
+        >
           <span class="text-zinc-500">usage loading…</span>
         </div>
         <button

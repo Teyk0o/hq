@@ -33,6 +33,7 @@ export function buildClaudeLaunchCommand(
   const home = homedir();
   const parts: string[] = [
     'bwrap',
+    '--unshare-user',
     '--unshare-ipc',
     '--unshare-pid',
     '--unshare-uts',
