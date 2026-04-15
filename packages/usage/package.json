@@ -1,0 +1,15 @@
+{
+  "name": "@hq/usage",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun"
+  },
+  "dependencies": {
+    "@hq/core": "workspace:*",
+    "zod": "^3.23.8"
+  }
+}

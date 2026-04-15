@@ -772,6 +772,67 @@ WantedBy=default.target
 
 Puis `systemctl --user daemon-reload && systemctl --user enable --now hq`. Confirmation interactive.
 
+## 15bis. Monitoring du quota Claude Max
+
+HQ surveille en continu la consommation du quota Claude Code de l'utilisateur et l'expose dans le dashboard.
+
+### 15bis.1 Source des données
+
+Les chiffres affichés par `/usage` dans Claude Code sont calculés localement à partir des logs `~/.claude/projects/*/*.jsonl`. HQ s'appuie sur **`ccusage`** (outil open-source, `bunx ccusage`) qui reproduit ces calculs : fenêtres de 5h, semaine Anthropic, ventilation par modèle.
+
+Pas de parseur maison : on shell-out `bunx ccusage blocks --json` + variantes, on cache le résultat.
+
+### 15bis.2 Package dédié
+
+Nouveau package `@hq/usage` exposant :
+
+- `fetchUsage(): Promise<UsageSnapshot>` — exécute ccusage, normalise
+- `UsageSnapshot` : `{ session_pct, week_all_pct, week_sonnet_pct, resets: {session, week_all, week_sonnet}, fetched_at }`
+- Cache dans `~/.hq/usage-cache.json` (TTL = intervalle adaptatif)
+
+### 15bis.3 Polling adaptatif
+
+- **Fréquence normale** : 10 min
+- **Fréquence accélérée** : 2 min si `week_all_pct > 80`
+- Scheduler dédié dans `@hq/daemon`, distinct des heartbeats d'agents
+- Émet bus event `claude.usage_updated` à chaque refresh
+
+### 15bis.4 Auto-pause daemon
+
+Seuil configurable dans `~/.hq/config.toml` :
+
+```toml
+[claude_usage]
+auto_pause_threshold_week = 85        # %, 0 = désactive
+auto_pause_threshold_session = 0      # désactivé par défaut, session reset toutes les 5h
+resume_on_reset = true
+```
+
+Au-delà du seuil, le daemon :
+1. Marque tous les agents en `paused_quota`
+2. Skip les ticks jusqu'au prochain reset de quota
+3. Émet event `daemon.quota_paused`
+4. Reprend auto au reset (détection via `resets.week_all < fetched_at`)
+
+### 15bis.5 Widget UI
+
+Header global du dashboard :
+
+```
+[ Session 60% · resets 23:00 ]  [ Week 32% · resets Apr 17 ]  [ Sonnet 4% · Apr 19 ]
+```
+
+Couleurs : vert < 60, orange 60-80, rouge > 80. Tooltip hover = détails.
+Push SSE via event `claude.usage_updated`.
+
+### 15bis.6 CLI
+
+```
+hq usage                              # affiche le snapshot courant
+hq usage --refresh                    # force un refresh immédiat
+hq usage --watch                      # live dans le terminal
+```
+
 ## 16. Roadmap
 
 - **v0.1 (MVP live)** : DB + migrations, MCP server (tous tools), daemon + scheduler + tmux, CLI humain, UI live kanban + activity + agents + drawer task, hooks règles de base, webhook Discord, systemd install, test sur projet dummy
