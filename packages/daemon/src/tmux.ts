@@ -70,11 +70,14 @@ export async function sendCtrlC(session: string): Promise<void> {
  */
 export async function sendPrompt(session: string, text: string): Promise<void> {
   const bufferName = `hq-prompt-${Date.now()}`;
-  const { code: setCode, stderr: setErr } = await runWithStdin(
-    ['set-buffer', '-b', bufferName, '-'],
+  // `load-buffer -b NAME -` reads from stdin (tmux's `set-buffer` does NOT —
+  // it treats the final arg as the literal data). Using the wrong one here was
+  // a silent bug where only a "-" character made it into Claude's composer.
+  const { code: loadCode, stderr: loadErr } = await runWithStdin(
+    ['load-buffer', '-b', bufferName, '-'],
     text,
   );
-  if (setCode !== 0) throw new Error(`tmux set-buffer failed: ${setErr.trim()}`);
+  if (loadCode !== 0) throw new Error(`tmux load-buffer failed: ${loadErr.trim()}`);
 
   const { code: pasteCode, stderr: pasteErr } = await run([
     'paste-buffer',
