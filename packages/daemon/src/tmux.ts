@@ -29,6 +29,12 @@ export async function create(
   if (command) args.push(command);
   const { code, stderr } = await run(args);
   if (code !== 0) throw new Error(`tmux new-session failed: ${stderr.trim()}`);
+
+  // Emit SIGWINCH via a no-op resize. Claude's Ink TUI occasionally hangs on
+  // terminal-capability queries when launched detached; a size change
+  // reliably kicks it into rendering.
+  await run(['resize-window', '-t', session, '-x', '180', '-y', '48']);
+  await run(['resize-window', '-t', session, '-x', '200', '-y', '50']);
 }
 
 export async function kill(session: string): Promise<void> {

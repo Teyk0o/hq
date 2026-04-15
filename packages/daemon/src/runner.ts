@@ -76,8 +76,10 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
     // the user's interactive shell autosuggest/highlighting.
     await tmux.create(session, worktreeDir, launchCmd);
     await tmux.pipePane(session, logPath);
-    // Let claude's TUI initialise.
-    await sleep(3500);
+    // Let Claude's TUI initialise before we paste the heartbeat prompt. 6s
+    // is conservative: Ink can take 2-4s and the first keystroke landing on
+    // a still-initialising TUI has been observed to wedge the pane.
+    await sleep(6000);
   } else {
     // Re-wire pipe-pane to a fresh log file for this heartbeat.
     await tmux.pipePane(session, logPath);

@@ -66,6 +66,9 @@ importers:
       '@hq/core':
         specifier: workspace:*
         version: link:../core
+      '@hq/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@hq/usage':
         specifier: workspace:*
         version: link:../usage

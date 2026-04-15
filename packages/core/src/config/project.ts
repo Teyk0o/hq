@@ -57,7 +57,9 @@ export const ProjectConfigSchema = z.object({
           'git ', 'make ', 'bun ', 'npm ', 'pnpm ', 'node ', 'tsc',
           'ls', 'cat ', 'grep ', 'rg ', 'find ', 'mkdir ', 'touch ',
           'echo ', 'cp ', 'mv ', 'sed ', 'awk ', 'head ', 'tail ',
-          'which ', 'pwd', 'env', 'diff ',
+          'which ', 'pwd', 'env', 'diff ', 'cd ', 'test ', 'wc ',
+          'sort ', 'uniq ', 'cut ', 'tr ', 'xargs ', 'printf ',
+          'true', 'false', 'date',
         ]),
       deny_patterns: z
         .array(z.string())

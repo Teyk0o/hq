@@ -2,7 +2,12 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { loadGlobalConfig } from '@hq/core';
-import { QuotaPoller, reapOrphanedTmuxSessions, Scheduler } from '@hq/daemon';
+import {
+  QuotaPoller,
+  Scheduler,
+  installEventTriggers,
+  reapOrphanedTmuxSessions,
+} from '@hq/daemon';
 import { getSharedBus } from '@hq/mcp';
 import { startUi } from '@hq/ui';
 import { listProjects } from '../registry';
@@ -49,6 +54,10 @@ export async function daemonStart(): Promise<void> {
     projects,
     isQuotaPaused: () => quotaPoller.isPaused(),
   });
+
+  // Event-driven: wake an idle reviewer the moment a task hits peer_review,
+  // instead of waiting for the next scheduler tick.
+  installEventTriggers(bus, projects);
 
   const projectMap = Object.fromEntries(projects.map((p) => [p.name, p.path]));
   await startUi({
