@@ -1,9 +1,8 @@
 import { mkdir, writeFile, access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { Database } from 'bun:sqlite';
+import { openProjectDb } from '@hq/core';
 import { registerProject } from '../registry';
-import { SCHEMA_DDL } from './schema-ddl';
 
 const DEFAULT_PROJECT_TOML = (name: string) => `[project]
 name = "${name}"
@@ -67,11 +66,8 @@ export async function initCommand(targetPath = process.cwd()): Promise<void> {
   await writeFile(`${hqDir}/.gitignore`, DEFAULT_GITIGNORE, 'utf-8');
   await writeFile(`${hqDir}/webhooks.toml`, '# [discord]\n# url = ""\n# events = []\n', 'utf-8');
 
-  // Initialise DB so the schema exists from the start.
-  const db = new Database(`${hqDir}/db.sqlite`, { create: true });
-  db.exec('PRAGMA journal_mode = WAL;');
-  db.exec(SCHEMA_DDL);
-  db.close();
+  // openProjectDb applies SCHEMA_DDL idempotently so the DB is fully set up.
+  openProjectDb(`${hqDir}/db.sqlite`);
 
   registerProject(name, absolute);
 

@@ -2,7 +2,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { loadGlobalConfig } from '@hq/core';
-import { QuotaPoller, Scheduler } from '@hq/daemon';
+import { QuotaPoller, reapOrphanedTmuxSessions, Scheduler } from '@hq/daemon';
 import { getSharedBus } from '@hq/mcp';
 import { startUi } from '@hq/ui';
 import { listProjects } from '../registry';
@@ -16,6 +16,21 @@ export async function daemonStart(): Promise<void> {
 
   const global = await loadGlobalConfig(join(homedir(), '.hq', 'config.toml'));
   const bus = getSharedBus();
+
+  // Clean up any tmux sessions orphaned by a previous daemon run before we
+  // start scheduling new ticks.
+  try {
+    const reap = await reapOrphanedTmuxSessions(projects);
+    if (reap.killed.length > 0) {
+      console.log(`[reaper] killed ${reap.killed.length} orphaned tmux session(s): ${reap.killed.join(', ')}`);
+    }
+    if (reap.kept.length > 0) {
+      console.log(`[reaper] kept ${reap.kept.length} session(s): ${reap.kept.join(', ')}`);
+    }
+  } catch (err) {
+    console.warn('[reaper] failed:', (err as Error).message);
+  }
+
   const scheduler = new Scheduler();
   const quotaPoller = new QuotaPoller(global.claude_usage, (snap) => {
     console.log(

@@ -4,6 +4,7 @@ import {
   agentState,
   loadAgentConfig,
   loadProjectConfig,
+  resolveCapabilities,
   type HQDatabase,
   newId,
   heartbeats as heartbeatsTable,
@@ -102,8 +103,10 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
   const prompt = await buildHeartbeatPrompt({
     agentName: options.agentName,
     agentRole: agent.agent.role,
+    capabilities: resolveCapabilities(agent.agent.role, agent.capabilities),
     projectName: project.project.name,
     projectPath: options.projectPath,
+    projectConfig: project,
     agentConfig: agent,
     db: options.db,
     maxTokens,

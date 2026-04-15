@@ -6,8 +6,8 @@ import {
   tasks as tasksTable,
   type ReviewVerdict,
 } from '@hq/core';
-import { eq } from 'drizzle-orm';
-import { requireCapability, type McpContext } from '../context';
+import { and, eq } from 'drizzle-orm';
+import { McpError, requireCapability, type McpContext } from '../context';
 
 export interface SubmitReviewInput {
   id: string;
@@ -15,41 +15,88 @@ export interface SubmitReviewInput {
   body: string;
 }
 
+/**
+ * Submit a peer review. Atomic with the state-transition check:
+ *  - if any reviewer requests changes → task.status goes to `in_progress` so
+ *    the author can address feedback
+ *  - else, if the number of distinct `approved` reviews reaches the project's
+ *    `min_reviewers` threshold → task.status goes to `review` (waiting for
+ *    human sign-off)
+ *
+ * We run all writes in one transaction so the transition is always consistent
+ * with the reviews table, even if two reviewers submit at the same time.
+ */
 export async function submitReview(ctx: McpContext, input: SubmitReviewInput) {
   requireCapability(ctx, 'can_review');
 
   const task = ctx.db.select().from(tasksTable).where(eq(tasksTable.id, input.id)).get();
-  if (!task) throw new Error(`Task not found: ${input.id}`);
+  if (!task) throw new McpError('task_not_found', `Task not found: ${input.id}`);
   if (task.status !== 'peer_review') {
-    throw new Error(`Task is not in peer_review (current: ${task.status})`);
+    throw new McpError(
+      'invalid_state',
+      `Task is not in peer_review (current: ${task.status})`,
+      { current_status: task.status },
+    );
   }
   if (task.assignee === ctx.agentName) {
-    throw new Error('Cannot review your own task');
+    throw new McpError('self_review', 'Cannot review your own task');
   }
   if (input.verdict === 'changes_requested' && !input.body.trim()) {
-    throw new Error('changes_requested requires a non-empty body');
+    throw new McpError(
+      'missing_body',
+      'changes_requested requires a non-empty body',
+    );
   }
 
-  ctx.db
-    .insert(reviewsTable)
-    .values({
-      id: newId(),
-      taskId: input.id,
-      reviewer: ctx.agentName,
-      verdict: input.verdict,
-      body: input.body,
-    })
-    .run();
+  const minReviewers = ctx.projectConfig.kanban.min_reviewers;
+  const outcome = ctx.db.transaction((tx) => {
+    tx.insert(reviewsTable)
+      .values({
+        id: newId(),
+        taskId: input.id,
+        reviewer: ctx.agentName,
+        verdict: input.verdict,
+        body: input.body,
+      })
+      .run();
 
-  ctx.db
-    .insert(activityTable)
-    .values({
-      agent: ctx.agentName,
-      action: 'review.submitted',
-      taskId: input.id,
-      details: JSON.stringify({ verdict: input.verdict }),
-    })
-    .run();
+    tx.insert(activityTable)
+      .values({
+        agent: ctx.agentName,
+        action: 'review.submitted',
+        taskId: input.id,
+        details: JSON.stringify({ verdict: input.verdict }),
+      })
+      .run();
+
+    // Re-read all reviews for this task to decide the next state.
+    const all = tx
+      .select()
+      .from(reviewsTable)
+      .where(eq(reviewsTable.taskId, input.id))
+      .all();
+
+    const hasChangesRequested = all.some((r) => r.verdict === 'changes_requested');
+    const approvals = new Set(
+      all.filter((r) => r.verdict === 'approved').map((r) => r.reviewer),
+    );
+
+    let transitionTo: 'in_progress' | 'review' | null = null;
+    if (hasChangesRequested) transitionTo = 'in_progress';
+    else if (approvals.size >= minReviewers) transitionTo = 'review';
+
+    if (transitionTo) {
+      tx.update(tasksTable)
+        .set({ status: transitionTo, updatedAt: Date.now() })
+        .where(and(eq(tasksTable.id, input.id), eq(tasksTable.status, 'peer_review')))
+        .run();
+      const after = tx.select().from(tasksTable).where(eq(tasksTable.id, input.id)).get();
+      if (after?.status === transitionTo) {
+        return { transitionTo };
+      }
+    }
+    return { transitionTo: null as 'in_progress' | 'review' | null };
+  });
 
   ctx.bus.publish({
     type: 'task.reviewed',
@@ -58,7 +105,17 @@ export async function submitReview(ctx: McpContext, input: SubmitReviewInput) {
     verdict: input.verdict,
   });
 
-  return { ok: true };
+  if (outcome.transitionTo) {
+    ctx.bus.publish({
+      type: 'task.status_changed',
+      task_id: input.id,
+      from: 'peer_review',
+      to: outcome.transitionTo,
+      by: 'daemon',
+    });
+  }
+
+  return { ok: true, next_status: outcome.transitionTo ?? 'peer_review' };
 }
 
 export async function addComment(

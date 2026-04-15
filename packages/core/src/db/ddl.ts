@@ -1,6 +1,11 @@
 /**
- * Inline DDL. Kept in sync with packages/core/src/db/schema.ts.
- * TODO: migrate to drizzle-kit generated migrations once the schema stabilises.
+ * Inline DDL, kept in sync with `schema.ts`. Applied idempotently by
+ * `openProjectDb()` on every connection so newly-cloned databases and older
+ * ones both converge to the current schema without a separate migration step.
+ *
+ * When schema evolves, add ALTER TABLE statements at the bottom (also guarded
+ * by IF NOT EXISTS / try-catch patterns) rather than editing the CREATE TABLE
+ * blocks — existing DBs won't re-create.
  */
 export const SCHEMA_DDL = `
 CREATE TABLE IF NOT EXISTS tasks (

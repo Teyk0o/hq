@@ -2,10 +2,8 @@ import { spawn } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { Database } from 'bun:sqlite';
-import { newId } from '@hq/core';
+import { newId, openProjectDb } from '@hq/core';
 import { listProjects, registerProject, unregisterProject } from '../registry';
-import { SCHEMA_DDL } from './schema-ddl';
 
 function sh(cmd: string, args: string[], opts: { cwd?: string } = {}): Promise<number> {
   return new Promise((resolve) => {
@@ -58,10 +56,7 @@ export async function debugReset(opts: DebugResetOpts): Promise<void> {
     await rm(join(p.path, '.hq', 'db.sqlite-wal'), { force: true });
     await rm(join(p.path, '.hq', 'db.sqlite-shm'), { force: true });
     // Rebuild a fresh DB with the schema so CLI commands keep working.
-    const db = new Database(join(p.path, '.hq', 'db.sqlite'), { create: true });
-    db.exec('PRAGMA journal_mode = WAL;');
-    db.exec(SCHEMA_DDL);
-    db.close();
+    openProjectDb(join(p.path, '.hq', 'db.sqlite'));
     log(`  cleaned runtime + reinitialised DB`);
 
     if (opts.all) {

@@ -7,8 +7,8 @@ import {
   tasks as tasksTable,
   type TaskState,
 } from '@hq/core';
-import { and, desc, eq, isNull } from 'drizzle-orm';
-import { requireCapability, type McpContext } from '../context';
+import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { McpError, requireCapability, type McpContext } from '../context';
 
 export interface ListTasksInput {
   status?: TaskState;
@@ -59,45 +59,82 @@ export async function getTask(ctx: McpContext, input: { id: string }) {
   return { task, comments, reviews };
 }
 
+/**
+ * Claim a task for the calling agent. This is the hot path for concurrency:
+ * several agents can call simultaneously and we MUST guarantee at most one
+ * wins. We use SQLite's atomic conditional UPDATE — WHERE clause enforces the
+ * precondition (status='todo' and assignee null-or-self) and we inspect
+ * `changes` on the result to detect lost races. Wrapping in a transaction
+ * isolates the check-then-act from the activity insert.
+ */
 export async function claimTask(ctx: McpContext, input: { id: string }) {
   requireCapability(ctx, 'can_claim_tasks');
 
-  const task = ctx.db.select().from(tasksTable).where(eq(tasksTable.id, input.id)).get();
-  if (!task) throw new Error(`Task not found: ${input.id}`);
-  if (task.assignee && task.assignee !== ctx.agentName) {
-    throw new Error(`Task already assigned to ${task.assignee}`);
+  const preTask = ctx.db
+    .select()
+    .from(tasksTable)
+    .where(eq(tasksTable.id, input.id))
+    .get();
+  if (!preTask) {
+    throw new McpError('task_not_found', `Task not found: ${input.id}`);
   }
 
   const transition = canActorTransition(
     { kind: 'agent', name: ctx.agentName, capabilities: ctx.capabilities },
-    task.status,
+    preTask.status,
     'in_progress',
   );
-  if (!transition.ok) throw new Error(transition.reason);
+  if (!transition.ok) {
+    throw new McpError('invalid_transition', transition.reason);
+  }
 
   const now = Date.now();
-  ctx.db
-    .update(tasksTable)
-    .set({
-      status: 'in_progress',
-      assignee: ctx.agentName,
-      claimedAt: now,
-      updatedAt: now,
-    })
-    .where(eq(tasksTable.id, input.id))
-    .run();
+  const claimed = ctx.db.transaction((tx) => {
+    tx.update(tasksTable)
+      .set({
+        status: 'in_progress',
+        assignee: ctx.agentName,
+        claimedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(tasksTable.id, input.id),
+          eq(tasksTable.status, 'todo'),
+          or(isNull(tasksTable.assignee), eq(tasksTable.assignee, ctx.agentName)),
+        ),
+      )
+      .run();
 
-  ctx.db
-    .insert(activityTable)
-    .values({ agent: ctx.agentName, action: 'task.claimed', taskId: input.id })
-    .run();
+    // Drizzle's bun-sqlite layer doesn't expose `changes` on .run() uniformly,
+    // so we re-read and assert the world looks right. Under the transaction
+    // isolation we're guaranteed a consistent view.
+    const after = tx.select().from(tasksTable).where(eq(tasksTable.id, input.id)).get();
+    if (!after || after.status !== 'in_progress' || after.assignee !== ctx.agentName) {
+      return null;
+    }
+
+    tx.insert(activityTable)
+      .values({ agent: ctx.agentName, action: 'task.claimed', taskId: input.id })
+      .run();
+
+    return true;
+  });
+
+  if (!claimed) {
+    const current = ctx.db.select().from(tasksTable).where(eq(tasksTable.id, input.id)).get();
+    throw new McpError(
+      'claim_race_lost',
+      `Could not claim ${input.id}: now status=${current?.status ?? '?'} assignee=${current?.assignee ?? 'null'}`,
+    );
+  }
 
   ctx.tasksWorkedThisHeartbeat.add(input.id);
   ctx.bus.publish({ type: 'task.claimed', task_id: input.id, agent: ctx.agentName });
   ctx.bus.publish({
     type: 'task.status_changed',
     task_id: input.id,
-    from: task.status,
+    from: preTask.status,
     to: 'in_progress',
     by: ctx.agentName,
   });

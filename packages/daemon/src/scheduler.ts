@@ -50,10 +50,26 @@ export class Scheduler {
     const pattern = `*/${intervalMin} * * * *`;
 
     const tick = new Cron(pattern, { paused: false }, async () => {
-      if (isQuotaPaused?.()) return;
-      await this.runTick(project, db, cfg.scheduler.max_concurrent_agents, stagger);
+      if (isQuotaPaused?.()) {
+        console.log(`[scheduler] ${project.name}: tick skipped (quota paused)`);
+        return;
+      }
+      const t0 = Date.now();
+      const fired = await this.runTick(
+        project,
+        db,
+        cfg.scheduler.max_concurrent_agents,
+        stagger,
+      );
+      const elapsed = Date.now() - t0;
+      console.log(
+        `[scheduler] ${project.name}: tick fired ${fired.length} agent(s) in ${elapsed}ms${fired.length ? ' (' + fired.join(', ') + ')' : ''}`,
+      );
     });
     this.timers.push(tick);
+    console.log(
+      `[scheduler] ${project.name}: every ${intervalMin}min (stagger ${stagger}s, max_concurrent ${cfg.scheduler.max_concurrent_agents})`,
+    );
 
     // Separate reaper tick (every minute) for stale heartbeats.
     const reaper = new Cron('* * * * *', { paused: false }, async () => {
@@ -67,7 +83,8 @@ export class Scheduler {
     db: HQDatabase,
     maxConcurrent: number,
     staggerSeconds: number,
-  ): Promise<void> {
+  ): Promise<string[]> {
+    const fired: string[] = [];
     const agents = await listAgents(project.path);
     const working = db
       .select()
@@ -79,8 +96,9 @@ export class Scheduler {
     for (const agentName of agents) {
       if (slots <= 0) break;
       const state = db.select().from(agentState).where(eq(agentState.name, agentName)).get();
-      if (state?.status === 'working' || state?.status === 'archived') continue;
-      if (state?.status === 'paused_quota') continue;
+      if (!state) continue;
+      if (state.status === 'working' || state.status === 'archived') continue;
+      if (state.status === 'paused_quota') continue;
 
       const agentCfg = await loadAgentConfig(
         join(project.path, '.hq', 'agents', `${agentName}.toml`),
@@ -91,11 +109,13 @@ export class Scheduler {
       if (slots < maxConcurrent) await sleep(staggerSeconds * 1000);
       try {
         await triggerHeartbeat({ projectPath: project.path, agentName, db });
+        fired.push(agentName);
         slots -= 1;
       } catch (err) {
         console.error(`[scheduler] ${project.name}/${agentName} heartbeat failed:`, err);
       }
     }
+    return fired;
   }
 }
 

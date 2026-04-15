@@ -13,7 +13,7 @@ import {
 } from '@hq/core';
 import { z } from 'zod';
 import { getSharedBus } from './bus';
-import type { McpContext } from './context';
+import { McpError, type McpContext } from './context';
 import * as heartbeat from './tools/heartbeat';
 import * as reviews from './tools/reviews';
 import * as taskTools from './tools/tasks';
@@ -170,6 +170,25 @@ const tools: ToolSpec[] = [
 
 const toolByName = new Map(tools.map((t) => [t.name, t] as const));
 
+/**
+ * Wrap any tool outcome in a uniform JSON envelope so agents can branch on
+ * `ok` without having to parse free-form error strings.
+ */
+function toolResult(
+  envelope:
+    | { ok: true; data: unknown }
+    | { ok: false; error: { code: string; message: string; details?: Record<string, unknown> } },
+) {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(envelope, null, 2),
+      },
+    ],
+  };
+}
+
 export async function startMcpServer(options: StartServerOptions): Promise<void> {
   const hqDir = join(options.projectPath, '.hq');
   const project = await loadProjectConfig(join(hqDir, 'project.toml'));
@@ -179,6 +198,7 @@ export async function startMcpServer(options: StartServerOptions): Promise<void>
   const ctx: McpContext = {
     projectPath: options.projectPath,
     projectName: project.project.name,
+    projectConfig: project,
     agentName: agent.agent.name,
     agentRole: agent.agent.role,
     capabilities: resolveCapabilities(agent.agent.role, agent.capabilities),
@@ -203,17 +223,40 @@ export async function startMcpServer(options: StartServerOptions): Promise<void>
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const tool = toolByName.get(request.params.name);
-    if (!tool) throw new Error(`Unknown tool: ${request.params.name}`);
-    const parsed = tool.schema.parse(request.params.arguments ?? {});
-    const result = await tool.handler(ctx, parsed);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
+    if (!tool) {
+      return toolResult({
+        ok: false,
+        error: { code: 'unknown_tool', message: `Unknown tool: ${request.params.name}` },
+      });
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = tool.schema.parse(request.params.arguments ?? {});
+    } catch (err) {
+      return toolResult({
+        ok: false,
+        error: {
+          code: 'invalid_input',
+          message: (err as Error).message,
         },
-      ],
-    };
+      });
+    }
+
+    try {
+      const result = await tool.handler(ctx, parsed);
+      return toolResult({ ok: true, data: result });
+    } catch (err) {
+      const structured =
+        err instanceof McpError
+          ? {
+              code: err.code,
+              message: err.message,
+              ...(err.details ? { details: err.details } : {}),
+            }
+          : { code: 'internal_error', message: (err as Error).message };
+      return toolResult({ ok: false, error: structured });
+    }
   });
 
   const transport = new StdioServerTransport();
