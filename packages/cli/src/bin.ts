@@ -117,11 +117,15 @@ debug
   .action(async (opts: { all?: boolean }) => debugReset(opts));
 debug
   .command('test')
-  .description('Reset + scaffold a fresh project with one agent and one task, then trigger a heartbeat')
+  .description('Scaffold a fresh project with a whole team of agents and several tasks, then fire a first heartbeat')
   .option('--path <path>', 'override project path (default: /tmp/hq-test-<rand>)')
-  .option('--agent <name>', 'agent name (default: alice)')
-  .option('--role <role>', 'agent role (default: worker)')
-  .option('--task <title>', 'task title (default: create hello.txt)')
+  .option(
+    '--agents <spec>',
+    'comma-separated agents, each "name:role" (default: alice:worker,bob:reviewer). Roles: worker|reviewer|boss|readonly',
+  )
+  .option('--tasks <n>', 'number of tasks to seed (default: 3)')
+  .option('--interval <minutes>', 'override scheduler.interval_minutes in project.toml (useful: 1 or 2 for smoke tests)')
+  .option('--reset', 'run `hq debug reset --all` before scaffolding')
   .option('--no-run', 'scaffold without triggering a heartbeat')
   .action(async (opts) => debugTest(opts));
 

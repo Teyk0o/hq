@@ -76,77 +76,185 @@ export async function debugReset(opts: DebugResetOpts): Promise<void> {
 
 export interface DebugTestOpts {
   path?: string;
-  agent?: string;
-  role?: string;
-  task?: string;
-  soul?: string;
+  agents?: string;
+  tasks?: string;
+  interval?: string;
+  reset?: boolean;
   noRun?: boolean;
 }
 
-export async function debugTest(opts: DebugTestOpts): Promise<void> {
-  const path = opts.path ?? `/tmp/hq-test-${newId().slice(0, 6)}`;
-  const agent = opts.agent ?? 'alice';
-  const role = opts.role ?? 'worker';
-  const task = opts.task ?? 'Create hello.txt with a friendly greeting';
-  const soul =
-    opts.soul ??
-    `# ${agent} — ${role}
+const DEFAULT_TASKS = [
+  'Create hello.txt with a friendly greeting to the HQ team',
+  'Add a README.md describing this test project in one paragraph',
+  'Create a haiku.txt file containing an original haiku about autonomous agents',
+  'Write notes/ideas.md with three feature ideas for a kanban tool',
+  'Add a LICENSE file with the MIT license text',
+  'Create scripts/hello.sh that echoes "Hello from HQ" and make it executable',
+  'Write CHANGELOG.md with a single entry for v0.1',
+  'Create docs/overview.md explaining what the project does in 5 bullets',
+];
+
+const SOUL_TEMPLATES: Record<string, (name: string) => string> = {
+  worker: (name) => `# ${name} — worker
 
 You work on a small test project. Your job: pick a todo task, do it, commit
 the result, submit for review. Use Read, Write, Edit, and Bash (git only).
 
-IMPORTANT order per heartbeat:
+Heartbeat order (strict):
   1. mcp__hq__start_heartbeat
-  2. mcp__hq__list_tasks(status="todo")
-  3. mcp__hq__claim_task
-  4. Do the work + git commit on your agent branch
-  5. mcp__hq__submit_for_review
-  6. mcp__hq__update_progress
-  7. mcp__hq__end_heartbeat (LAST)
-`;
+  2. mcp__hq__list_tasks(status="todo", assignee=null)
+  3. mcp__hq__claim_task on the first one you can do
+  4. Do the work in the current working directory
+  5. git add . && git commit -m "<short message>"
+  6. mcp__hq__submit_for_review with a one-line summary
+  7. mcp__hq__update_progress (short note on what you did)
+  8. mcp__hq__end_heartbeat (ALWAYS last)
+`,
+  reviewer: (name) => `# ${name} — reviewer
+
+You review other agents' work. You cannot claim tasks yourself. Be honest:
+look for missing requirements, sloppy commits, and code that won't work.
+
+Heartbeat order:
+  1. mcp__hq__start_heartbeat
+  2. mcp__hq__list_tasks(status="peer_review")
+  3. For each task where you are NOT the assignee:
+     - Read the diff (git log, git show on the agent branch)
+     - Call mcp__hq__submit_review with verdict "approved" or
+       "changes_requested" (the latter requires a non-empty body)
+  4. mcp__hq__update_progress (what you reviewed)
+  5. mcp__hq__end_heartbeat (ALWAYS last)
+`,
+  boss: (name) => `# ${name} — boss
+
+You plan the work. You cannot claim tasks but you can create and promote them.
+You are trusted to keep the backlog flowing from the active goals.
+
+Heartbeat order:
+  1. mcp__hq__start_heartbeat
+  2. Check the "Active goals" section in this prompt for targets under quota
+  3. For each goal below target this week: mcp__hq__create_task, then
+     mcp__hq__promote_task to move it from backlog to todo
+  4. mcp__hq__list_tasks(status="peer_review") and submit_review where you
+     are eligible (goals overlap, not the author)
+  5. mcp__hq__update_progress
+  6. mcp__hq__end_heartbeat (ALWAYS last)
+`,
+  readonly: (name) => `# ${name} — read-only
+
+You are a read-only auditor. You can list tasks, read them, and comment via
+add_comment. You cannot claim, review, or modify files.
+
+Heartbeat order:
+  1. mcp__hq__start_heartbeat
+  2. mcp__hq__list_tasks + observe
+  3. mcp__hq__add_comment on tasks where your observation adds value
+  4. mcp__hq__update_progress
+  5. mcp__hq__end_heartbeat (ALWAYS last)
+`,
+};
+
+function parseAgentsSpec(spec: string): Array<{ name: string; role: string }> {
+  return spec
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [name, role = 'worker'] = entry.split(':').map((s) => s.trim());
+      return { name: name!, role };
+    });
+}
+
+export async function debugTest(opts: DebugTestOpts): Promise<void> {
+  if (opts.reset) {
+    await debugReset({ all: true });
+    console.log('');
+  }
+
+  const path = opts.path ?? `/tmp/hq-test-${newId().slice(0, 6)}`;
+  const agentSpecs = parseAgentsSpec(opts.agents ?? 'alice:worker,bob:reviewer');
+  const taskCount = opts.tasks ? Math.max(1, Number.parseInt(opts.tasks, 10)) : 3;
+  const interval = opts.interval ? Number.parseInt(opts.interval, 10) : undefined;
 
   console.log(`▸ Creating fresh project at ${path}`);
   await mkdir(path, { recursive: true });
   await sh('git', ['init', '-q'], { cwd: path });
+  await sh('git', ['config', 'user.email', 'hq-agents@local'], { cwd: path });
+  await sh('git', ['config', 'user.name', 'HQ Agents'], { cwd: path });
   await sh('git', ['commit', '--allow-empty', '-m', 'init', '-q'], { cwd: path });
 
-  // Inline init (avoid shelling out to `hq init` when we can reuse the logic).
   const { initCommand } = await import('./init');
   process.chdir(path);
   try {
     await initCommand(path);
   } catch (err) {
-    // If .hq already exists from a previous partial run, rewrite config to be consistent.
     console.warn(`[debug:test] init said: ${(err as Error).message}`);
   }
 
+  // Optionally tune the scheduler interval so we see ticks sooner during testing.
+  if (interval && interval > 0) {
+    const tomlPath = join(path, '.hq', 'project.toml');
+    const raw = await (await import('node:fs/promises')).readFile(tomlPath, 'utf-8');
+    const patched = raw.replace(
+      /^interval_minutes\s*=.*$/m,
+      `interval_minutes = ${interval}`,
+    );
+    await (await import('node:fs/promises')).writeFile(tomlPath, patched, 'utf-8');
+  }
+
   const { agentNew } = await import('./agent');
-  await agentNew(agent, { role });
-  await writeFile(join(path, '.hq', 'agents', `${agent}.md`), soul, 'utf-8');
+  for (const spec of agentSpecs) {
+    await agentNew(spec.name, { role: spec.role });
+    const soulBuilder = SOUL_TEMPLATES[spec.role] ?? SOUL_TEMPLATES.worker!;
+    await writeFile(
+      join(path, '.hq', 'agents', `${spec.name}.md`),
+      soulBuilder(spec.name),
+      'utf-8',
+    );
+  }
 
   const { taskAdd } = await import('./task');
-  await taskAdd(task, {});
+  const chosenTasks = DEFAULT_TASKS.slice(0, Math.min(taskCount, DEFAULT_TASKS.length));
+  // If the user asked for more than the pool, cycle through with a suffix.
+  while (chosenTasks.length < taskCount) {
+    const base = DEFAULT_TASKS[chosenTasks.length % DEFAULT_TASKS.length]!;
+    chosenTasks.push(`${base} (variant ${Math.ceil(chosenTasks.length / DEFAULT_TASKS.length) + 1})`);
+  }
+  const priorities = [1, 2, 3, 3, 4];
+  for (let i = 0; i < chosenTasks.length; i += 1) {
+    await taskAdd(chosenTasks[i]!, {
+      priority: String(priorities[i % priorities.length]),
+    });
+  }
 
-  console.log('');
-  console.log(`  path:    ${path}`);
-  console.log(`  agent:   ${agent} (${role})`);
-  console.log(`  task:    "${task}"`);
-  console.log('');
-
-  // Ensure the project is registered (init does it, but harmless to re-run).
   const name = path.split('/').pop()!;
   registerProject(name, path);
 
+  console.log('');
+  console.log(`  path:     ${path}`);
+  console.log(`  agents:   ${agentSpecs.map((a) => `${a.name}(${a.role})`).join(', ')}`);
+  console.log(`  tasks:    ${chosenTasks.length}`);
+  if (interval) console.log(`  interval: ${interval} min`);
+  console.log('');
+
   if (opts.noRun) {
-    console.log(`✓ Project ready. Trigger with: hq agent run ${agent}`);
+    console.log(`✓ Project ready.`);
+    console.log(`  Next: hq daemon start     # autonomous`);
+    console.log(`  Or:   hq agent run <name> # manual trigger`);
     return;
   }
 
-  const { agentRun } = await import('./agent');
-  await agentRun(agent);
-  console.log('');
-  console.log(`  Attach live: tmux attach -t hq-${slugify(name)}-${agent}`);
-  console.log(`  Dashboard:   http://127.0.0.1:7433  (start via: hq daemon start)`);
+  // Kick things off by triggering the first worker manually so the user gets
+  // an immediate signal; the scheduler will take over on subsequent ticks.
+  const firstWorker = agentSpecs.find((a) => a.role === 'worker');
+  if (firstWorker) {
+    const { agentRun } = await import('./agent');
+    await agentRun(firstWorker.name);
+    console.log('');
+    console.log(`  Attach:    tmux attach -t hq-${slugify(name)}-${firstWorker.name}`);
+  }
+  console.log(`  Dashboard: http://127.0.0.1:7433  (start via: hq daemon start)`);
+  console.log(`  Autonomy:  hq daemon start  (scheduler will fire every ${interval ?? 15} min)`);
 }
 
 async function listTmuxSessions(): Promise<string[]> {
