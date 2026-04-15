@@ -12,6 +12,7 @@ import {
 import { and, eq, isNull } from 'drizzle-orm';
 import { buildHeartbeatPrompt } from './heartbeat';
 import * as tmux from './tmux';
+import { ensureWorktree } from './worktree';
 
 export interface RunHeartbeatOptions {
   projectPath: string;
@@ -33,7 +34,12 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
   const slug = slugify(project.project.name);
   const session = tmux.sessionName(slug, options.agentName);
   const worktreeDir = join(options.projectPath, project.git.worktree_dir, options.agentName);
-  await mkdir(worktreeDir, { recursive: true });
+  await ensureWorktree({
+    projectPath: options.projectPath,
+    worktreePath: worktreeDir,
+    agentName: options.agentName,
+    branchPrefix: project.git.branch_prefix,
+  });
 
   const logDir = join(options.projectPath, '.hq', 'logs', options.agentName);
   await mkdir(logDir, { recursive: true });

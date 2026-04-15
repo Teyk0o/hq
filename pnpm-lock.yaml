@@ -32,6 +32,9 @@ importers:
       '@hq/ui':
         specifier: workspace:*
         version: link:../ui
+      '@hq/usage':
+        specifier: workspace:*
+        version: link:../usage
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -93,6 +96,12 @@ importers:
       '@hq/core':
         specifier: workspace:*
         version: link:../core
+      '@hq/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@hq/usage':
+        specifier: workspace:*
+        version: link:../usage
       hono:
         specifier: ^4.6.0
         version: 4.12.14

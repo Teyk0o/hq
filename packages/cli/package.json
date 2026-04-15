@@ -16,6 +16,7 @@
     "@hq/daemon": "workspace:*",
     "@hq/mcp": "workspace:*",
     "@hq/ui": "workspace:*",
+    "@hq/usage": "workspace:*",
     "commander": "^12.1.0",
     "smol-toml": "^1.3.0"
   }

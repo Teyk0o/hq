@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@hq/core": "workspace:*",
+    "@hq/mcp": "workspace:*",
+    "@hq/usage": "workspace:*",
     "hono": "^4.6.0"
   }
 }
