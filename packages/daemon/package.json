@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@hq/core": "workspace:*",
-    "croner": "^8.1.0"
+    "@hq/usage": "workspace:*",
+    "croner": "^8.1.0",
+    "drizzle-orm": "^0.36.0"
   }
 }

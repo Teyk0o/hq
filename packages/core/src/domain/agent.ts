@@ -47,7 +47,13 @@ export const DEFAULT_TOOLS_PER_ROLE: Record<AgentRole, string[]> = {
 
 export function resolveCapabilities(
   role: AgentRole,
-  overrides?: Partial<AgentCapabilities>,
+  overrides?: { [K in keyof AgentCapabilities]?: boolean | undefined },
 ): AgentCapabilities {
-  return { ...ROLE_CAPABILITIES[role], ...(overrides ?? {}) };
+  const base = ROLE_CAPABILITIES[role];
+  if (!overrides) return { ...base };
+  const merged: AgentCapabilities = { ...base };
+  for (const [key, val] of Object.entries(overrides) as [keyof AgentCapabilities, boolean | undefined][]) {
+    if (val !== undefined) merged[key] = val;
+  }
+  return merged;
 }

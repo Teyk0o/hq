@@ -12,6 +12,7 @@
   "dependencies": {
     "@hq/core": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "drizzle-orm": "^0.36.0",
     "zod": "^3.23.8"
   }
 }
