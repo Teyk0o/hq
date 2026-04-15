@@ -15,17 +15,20 @@ export async function isBwrapAvailable(): Promise<boolean> {
  * bubblewrap sandbox with `--dangerously-skip-permissions`.
  *
  * Isolation:
- *   - Whole FS read-only, except ~/.claude (credentials) and the agent worktree
+ *   - Whole FS read-only, except ~/.claude (credentials), ~/.claude.json,
+ *     the project root (for .hq/project.toml + db.sqlite + agent configs,
+ *     which the MCP server reads/writes), and the agent worktree inside it.
  *   - Separate namespaces for IPC/PID/UTS/cgroup (but shared net for git/pnpm)
  *   - Dies with the parent tmux pane
  *
- * This returns a string because it is fed to `tmux send-keys` — i.e. the shell
- * inside the tmux pane executes it.
+ * Returns a shell command string because it is dispatched to tmux as the
+ * pane's root command.
  */
 export function buildClaudeLaunchCommand(
   worktree: string,
   cfg: ProjectConfig['sandbox'],
   bwrapAvailable: boolean,
+  projectRoot: string,
 ): string {
   if (!cfg.enabled || !bwrapAvailable) {
     return `claude --dangerously-skip-permissions`;
@@ -47,7 +50,10 @@ export function buildClaudeLaunchCommand(
     '--tmpfs', '/tmp',
     '--dev-bind', '/dev', '/dev',
     '--proc', '/proc',
-    '--bind', worktree, worktree,
+    // Bind the project root (includes .hq/project.toml, .hq/db.sqlite, .hq/agents/)
+    // so the MCP server can read config and mutate the kanban from inside the sandbox.
+    // The worktree is a subdir of projectRoot so a single bind covers both.
+    '--bind', projectRoot, projectRoot,
     '--bind', `${home}/.claude`, `${home}/.claude`,
     // ~/.claude.json is a sibling file (not inside ~/.claude/). Claude Code writes
     // to it to persist trust/onboarding state; without a writable bind, the TUI

@@ -60,7 +60,12 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
           'Install bubblewrap (apt install bubblewrap) for proper isolation.',
       );
     }
-    const launchCmd = buildClaudeLaunchCommand(worktreeDir, project.sandbox, bwrapOk);
+    const launchCmd = buildClaudeLaunchCommand(
+      worktreeDir,
+      project.sandbox,
+      bwrapOk,
+      options.projectPath,
+    );
     // Launch claude as the tmux pane's root command (not inside a shell) so that
     // send-keys to this pane goes directly to claude instead of being mangled by
     // the user's interactive shell autosuggest/highlighting.
