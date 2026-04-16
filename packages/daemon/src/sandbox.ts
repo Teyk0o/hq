@@ -61,6 +61,14 @@ export function buildClaudeLaunchCommand(
     // to it to persist trust/onboarding state; without a writable bind, the TUI
     // hangs silently on its first write attempt.
     '--bind-try', `${home}/.claude.json`, `${home}/.claude.json`,
+    // Git credentials for `git push`: SSH keys, user gitconfig, optional
+    // .netrc for HTTPS token auth. Read-only so a rogue agent cannot
+    // overwrite them, --bind-try so a missing path is a no-op rather than
+    // a hard failure (fresh machines won't have .netrc for instance).
+    '--ro-bind-try', `${home}/.ssh`, `${home}/.ssh`,
+    '--ro-bind-try', `${home}/.gitconfig`, `${home}/.gitconfig`,
+    '--ro-bind-try', `${home}/.netrc`, `${home}/.netrc`,
+    '--ro-bind-try', `${home}/.config/git`, `${home}/.config/git`,
     '--die-with-parent',
     '--chdir', worktree,
     '--setenv', 'HOME', home,

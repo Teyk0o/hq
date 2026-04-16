@@ -568,6 +568,13 @@ export function createApp(options: UiServerOptions): Hono {
     return c.body(null, 204);
   });
 
+  /**
+   * Push the agent's branch to origin under the human's git identity. We
+   * deliberately run git push from the daemon process (not from inside the
+   * agent's bwrap sandbox) so the user's SSH keys and ~/.netrc are used
+   * directly without having to thread them through. Error stderr is
+   * surfaced so the UI can toast a real message on auth / conflict failures.
+   */
   app.post('/api/tasks/:id/push', async (c) => {
     const id = c.req.param('id');
     const project = currentProject(c.req.raw);
@@ -581,12 +588,16 @@ export function createApp(options: UiServerOptions): Hono {
       db.close();
       return c.json({ error: 'task not pushable' }, 400);
     }
-    const proc = Bun.spawn(['git', 'push', '-u', 'origin', task.branch], {
+
+    const push = Bun.spawnSync(['git', 'push', '-u', 'origin', task.branch], {
       cwd: projectPath,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    await proc.exited;
+    if (push.exitCode !== 0) {
+      db.close();
+      const stderr = push.stderr.toString().trim() || 'git push failed';
+      return c.json({ error: stderr }, 422);
+    }
+
     db.prepare(
       `UPDATE tasks SET status = 'done', pushed = 1, completed_at = ?, updated_at = ? WHERE id = ?`,
     ).run(Date.now(), Date.now(), id);
