@@ -48,10 +48,22 @@ export function createApp(options: UiServerOptions): Hono {
   const app = new Hono();
   const bus = getSharedBus();
 
+  // Cache Database handles per project. A single-user local dashboard has a
+  // handful of projects at most; opening + closing per request was costing
+  // us ~1-2ms of syscalls + WAL-mode init on every HTMX refresh. WAL allows
+  // concurrent readers on the same handle, and writers are gated by the
+  // busy_timeout pragma, so a long-lived cached handle is safe.
+  const dbPool = new Map<string, Database>();
   const openDb = (project: string): Database => {
     const path = options.projects[project];
     if (!path) throw new Error(`Unknown project: ${project}`);
-    return new Database(join(path, '.hq', 'db.sqlite'));
+    const existing = dbPool.get(project);
+    if (existing) return existing;
+    const db = new Database(join(path, '.hq', 'db.sqlite'));
+    db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA busy_timeout = 5000');
+    dbPool.set(project, db);
+    return db;
   };
 
   const projectNames = Object.keys(options.projects);
@@ -151,7 +163,7 @@ export function createApp(options: UiServerOptions): Hono {
     const packages = (db
       .prepare(`SELECT DISTINCT package FROM tasks WHERE package IS NOT NULL ORDER BY package`)
       .all() as Array<{ package: string }>).map((r) => r.package);
-    db.close();
+    // db pooled — no close
     return { tasks, assignees, packages };
   };
 
@@ -172,7 +184,7 @@ export function createApp(options: UiServerOptions): Hono {
             `SELECT name, status FROM agent_state WHERE status != 'archived' ORDER BY name`,
           )
           .all() as Array<{ name: string; status: string }>;
-        db.close();
+        // db pooled — no close
         const presentations = await loadAgentPresentations(name);
         const genderByName = new Map(presentations.map((p) => [p.name, p.gender]));
         summaries.push({
@@ -265,7 +277,7 @@ export function createApp(options: UiServerOptions): Hono {
       | (KanbanTask & { description?: string; branch?: string | null })
       | null;
     if (!task) {
-      db.close();
+      // db pooled — no close
       return c.notFound();
     }
     const comments = db
@@ -276,7 +288,7 @@ export function createApp(options: UiServerOptions): Hono {
         'SELECT reviewer, verdict, body, created_at FROM reviews WHERE task_id = ? ORDER BY created_at',
       )
       .all(id) as Array<{ reviewer: string; verdict: string; body: string; created_at: number }>;
-    db.close();
+    // db pooled — no close
     const commits =
       projectPath && task.branch ? gitCommitsForBranch(projectPath, task.branch) : [];
     const agents = await loadAgentPresentations(project);
@@ -307,7 +319,7 @@ export function createApp(options: UiServerOptions): Hono {
         `SELECT id FROM heartbeats WHERE agent = ? ORDER BY started_at DESC LIMIT 1`,
       )
       .get(name) as { id: string } | undefined;
-    db.close();
+    // db pooled — no close
     if (!hb) {
       return c.html(
         <aside class="drawer fixed right-0 top-0 h-full w-[420px] border-l border-soft p-6" style="background: var(--surface)">
@@ -346,7 +358,7 @@ export function createApp(options: UiServerOptions): Hono {
         }
       | undefined;
     if (!hb) {
-      db.close();
+      // db pooled — no close
       return c.notFound();
     }
     const endedAt = hb.ended_at ?? Date.now();
@@ -362,7 +374,7 @@ export function createApp(options: UiServerOptions): Hono {
       details: string;
       created_at: number;
     }>;
-    db.close();
+    // db pooled — no close
 
     let logText = '';
     if (existsSync(hb.log_path)) {
@@ -393,7 +405,7 @@ export function createApp(options: UiServerOptions): Hono {
       details: string;
       task_id: string | null;
     }>;
-    db.close();
+    // db pooled — no close
     const agents = await loadAgentPresentations(project);
     return c.html(
       <Layout project={project} projects={projectNames} title="Activity" page="activity">
@@ -422,7 +434,7 @@ export function createApp(options: UiServerOptions): Hono {
       tokens_today: number;
       tokens_budget: number;
     }>;
-    db.close();
+    // db pooled — no close
     const presentations = await loadAgentPresentations(project);
     const genderByName = new Map(presentations.map((p) => [p.name, p.gender]));
 
@@ -459,7 +471,7 @@ export function createApp(options: UiServerOptions): Hono {
         },
       };
     });
-    db2.close();
+    // db2 pooled — no close
     const url2 = new URL(c.req.raw.url);
     const qs = new URLSearchParams();
     qs.set('project', project);
@@ -498,18 +510,18 @@ export function createApp(options: UiServerOptions): Hono {
       .prepare('SELECT status FROM agent_state WHERE name = ?')
       .get(agent) as { status: string } | undefined;
     if (!row) {
-      db.close();
+      // db pooled — no close
       return false;
     }
     const next = mutation(row.status);
     if (!next) {
-      db.close();
+      // db pooled — no close
       return false;
     }
     db.prepare(
       `UPDATE agent_state SET status = ?, blocked_reason = ? WHERE name = ?`,
     ).run(next.status, next.blocked_reason ?? null, agent);
-    db.close();
+    // db pooled — no close
     bus.publish({ type: 'agent.status_changed', agent, status: next.status });
     return true;
   };
@@ -561,7 +573,7 @@ export function createApp(options: UiServerOptions): Hono {
     const states = db
       .prepare(`SELECT name, status FROM agent_state WHERE status != 'archived' ORDER BY name`)
       .all() as Array<{ name: string; status: string }>;
-    db.close();
+    // db pooled — no close
     const presentations = await loadAgentPresentations(project);
     const genderByName = new Map(presentations.map((p) => [p.name, p.gender]));
     const merged = states.map((s) => {
@@ -588,7 +600,7 @@ export function createApp(options: UiServerOptions): Hono {
       active: number;
       open_tasks: number;
     }>;
-    db.close();
+    // db pooled — no close
     const goals: GoalRow[] = rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -642,7 +654,7 @@ export function createApp(options: UiServerOptions): Hono {
       `INSERT INTO goals (id, title, description, assignees, tasks_per_week, active)
        VALUES (?, ?, ?, ?, ?, 1)`,
     ).run(id, title, description, JSON.stringify(assignees), tpw);
-    db.close();
+    // db pooled — no close
     bus.publish({ type: 'goal.created', goal_id: id });
     return c.html(await goalsFragment(project));
   });
@@ -654,7 +666,7 @@ export function createApp(options: UiServerOptions): Hono {
     db.prepare(
       `UPDATE goals SET active = 1 - active, updated_at = ? WHERE id = ?`,
     ).run(Date.now(), id);
-    db.close();
+    // db pooled — no close
     bus.publish({ type: 'goal.updated', goal_id: id });
     return c.html(await goalsFragment(project));
   });
@@ -664,7 +676,7 @@ export function createApp(options: UiServerOptions): Hono {
     const id = c.req.param('id');
     const db = openDb(project);
     db.prepare(`DELETE FROM goals WHERE id = ?`).run(id);
-    db.close();
+    // db pooled — no close
     bus.publish({ type: 'goal.updated', goal_id: id });
     return c.html(await goalsFragment(project));
   });
@@ -707,7 +719,7 @@ export function createApp(options: UiServerOptions): Hono {
     const tasks_by_status_rows = db
       .prepare(`SELECT status, COUNT(*) AS n FROM tasks GROUP BY status`)
       .all() as Array<{ status: string; n: number }>;
-    db.close();
+    // db pooled — no close
     const agents = await loadAgentPresentations(project);
     const genderByName = new Map(agents.map((a) => [a.name, a.gender]));
     const top_with_gender = top_agents.map((t) => {
@@ -767,7 +779,7 @@ export function createApp(options: UiServerOptions): Hono {
     db.prepare(
       `UPDATE messages SET read_at = ? WHERE read_at IS NULL AND (to_agent = '*' OR to_agent = 'human')`,
     ).run(Date.now());
-    db.close();
+    // db pooled — no close
     const agents = await loadAgentPresentations(project);
     return c.html(
       <Layout project={project} projects={projectNames} title="Inbox" page="inbox">
@@ -786,7 +798,7 @@ export function createApp(options: UiServerOptions): Hono {
         `SELECT COUNT(*) AS n FROM messages WHERE read_at IS NULL AND (to_agent = '*' OR to_agent = 'human')`,
       )
       .get() as { n: number };
-    db.close();
+    // db pooled — no close
     return c.html(
       row.n > 0 ? (
         <span
@@ -814,7 +826,7 @@ export function createApp(options: UiServerOptions): Hono {
     db.prepare(
       `INSERT INTO messages (id, from_agent, to_agent, subject, body) VALUES (?, 'human', ?, ?, ?)`,
     ).run(id, to, subject, body);
-    db.close();
+    // db pooled — no close
     bus.publish({ type: 'message.sent', from: 'human', to, message_id: id });
     return c.redirect(`/inbox?project=${project}`);
   });
@@ -876,7 +888,7 @@ export function createApp(options: UiServerOptions): Hono {
       `INSERT INTO tasks (id, title, description, priority, package, created_by, status)
        VALUES (?, ?, ?, ?, ?, 'human', ?)`,
     ).run(id, title, description, priority, pkg, status);
-    db.close();
+    // db pooled — no close
 
     bus.publish({ type: 'task.created', task_id: id, by: 'human' });
     return c.html(<></>);
@@ -893,7 +905,7 @@ export function createApp(options: UiServerOptions): Hono {
       | { id: string; title: string }
       | null;
     if (!task) {
-      db.close();
+      // db pooled — no close
       return c.json({ error: 'task not found' }, 404);
     }
     const mentions = extractMentions(body);
@@ -913,7 +925,7 @@ export function createApp(options: UiServerOptions): Hono {
       ).run(msgId, mention, `You were mentioned on: ${task.title}`, body);
       fanoutIds.push({ to: mention, id: msgId });
     }
-    db.close();
+    // db pooled — no close
     bus.publish({
       type: 'task.commented',
       task_id: id,
@@ -936,7 +948,7 @@ export function createApp(options: UiServerOptions): Hono {
       | (KanbanTask & { description?: string; branch?: string | null })
       | null;
     if (!task) {
-      db.close();
+      // db pooled — no close
       return null;
     }
     const comments = db
@@ -947,7 +959,7 @@ export function createApp(options: UiServerOptions): Hono {
         'SELECT reviewer, verdict, body, created_at FROM reviews WHERE task_id = ? ORDER BY created_at',
       )
       .all(id) as Array<{ reviewer: string; verdict: string; body: string; created_at: number }>;
-    db.close();
+    // db pooled — no close
     const commits =
       projectPath && task.branch ? gitCommitsForBranch(projectPath, task.branch) : [];
     const agents = await loadAgentPresentations(project);
@@ -970,7 +982,7 @@ export function createApp(options: UiServerOptions): Hono {
     db.prepare(
       `UPDATE tasks SET status = 'approved', updated_at = ? WHERE id = ? AND status = 'review'`,
     ).run(Date.now(), id);
-    db.close();
+    // db pooled — no close
     bus.publish({
       type: 'task.status_changed',
       task_id: id,
@@ -988,7 +1000,7 @@ export function createApp(options: UiServerOptions): Hono {
     db.prepare(
       `UPDATE tasks SET status = 'in_progress', updated_at = ? WHERE id = ? AND status = 'review'`,
     ).run(Date.now(), id);
-    db.close();
+    // db pooled — no close
     bus.publish({
       type: 'task.status_changed',
       task_id: id,
@@ -1016,7 +1028,7 @@ export function createApp(options: UiServerOptions): Hono {
       | { status: string; branch: string | null }
       | null;
     if (!task || task.status !== 'approved' || !task.branch) {
-      db.close();
+      // db pooled — no close
       return c.json({ error: 'task not pushable' }, 400);
     }
 
@@ -1047,7 +1059,7 @@ export function createApp(options: UiServerOptions): Hono {
       db.prepare(
         `UPDATE tasks SET status = 'blocked', blocked_reason = ?, updated_at = ? WHERE id = ?`,
       ).run(reason, Date.now(), id);
-      db.close();
+      // db pooled — no close
       bus.publish({ type: 'task.blocked', task_id: id, reason });
       bus.publish({
         type: 'task.status_changed',
@@ -1063,7 +1075,7 @@ export function createApp(options: UiServerOptions): Hono {
       cwd: projectPath,
     });
     if (push.exitCode !== 0) {
-      db.close();
+      // db pooled — no close
       const stderr = push.stderr.toString().trim() || 'git push failed';
       return c.json({ error: stderr }, 422);
     }
@@ -1112,7 +1124,7 @@ export function createApp(options: UiServerOptions): Hono {
       }
     }
 
-    db.close();
+    // db pooled — no close
     bus.publish({ type: 'task.pushed', task_id: id, branch: task.branch });
     bus.publish({
       type: 'task.status_changed',
