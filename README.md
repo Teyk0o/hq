@@ -8,31 +8,39 @@ a boss that plans from goals, and you approving the output. Agents message
 each other, peer-review each other, and everything moves live in a local
 web dashboard.
 
-## Two-minute demo
+## Install
+
+One command. Installs Bun, tmux, bubblewrap, clones the repo, compiles the
+binary into `~/.local/bin/hq`:
 
 ```bash
-# Prereqs: tmux, bubblewrap, bun ≥ 1.1, claude
-sudo apt install -y tmux bubblewrap
-curl -fsSL https://bun.sh/install | bash
+curl -fsSL https://raw.githubusercontent.com/Teyk0o/hq/main/install.sh | bash
+```
 
-# Ubuntu 24+ only: allow user namespaces for bwrap
-echo "kernel.apparmor_restrict_unprivileged_userns = 0" \
-  | sudo tee /etc/sysctl.d/60-userns.conf
-sudo sysctl --system
+You still need the [Claude Code CLI](https://claude.com/claude-code) on
+your PATH — HQ spawns it for every heartbeat.
 
-# Install HQ from source
-git clone <this-repo> && cd HQ && bun install
-cd packages/cli && bun link
+## Try it
 
-# Seed a demo project and launch the daemon
+```bash
 hq debug test --reset --agents alice:worker,bob:reviewer --tasks 5
 hq daemon start
-# Open http://127.0.0.1:7433
+# open http://127.0.0.1:7433
 ```
 
 Alice claims a task, Bob reviews it, the task goes to `review` and waits
-for your approval in the UI. You click **Approve** then **Push** and it's
-out.
+for your approval in the UI. Click **Approve** then **Push** and it's out.
+
+## Real project
+
+```bash
+cd ~/src/myproject
+hq init                                      # scaffold .hq/
+hq agent new alice --role worker
+hq agent new bob   --role reviewer
+hq task add "Refactor /users endpoint" --priority 2
+hq daemon start
+```
 
 ## Architecture
 
@@ -55,12 +63,12 @@ daemon listens on the event bus and wakes reviewers event-driven.
 
 ## Documentation
 
-- **[docs/GUIDE.md](./docs/GUIDE.md)** — full human guide: install,
-  concepts, CLI, configuration, roles, rules, daemon, integrations,
-  admin, SOUL templates, troubleshooting
+- **[docs/GUIDE.md](./docs/GUIDE.md)** — full human guide: concepts,
+  CLI, configuration, roles, rules, daemon, integrations, admin, SOUL
+  templates, troubleshooting, example 9-agent startup team
 - **[docs/CLAUDE.md](./docs/CLAUDE.md)** — reference for Claude agents
-  asked to set up HQ on a project (tool reference, protocol, recipes)
-- **[ROADMAP.md](./ROADMAP.md)** — sprint status, MVP → v1
+  asked to set up HQ on a project (tool reference, protocol, recipes,
+  team template)
 
 ## Dev
 

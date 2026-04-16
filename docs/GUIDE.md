@@ -34,35 +34,43 @@ repo?"), see [`CLAUDE.md`](./CLAUDE.md).
 
 ## Installation
 
-Requirements:
-
-- **tmux ≥ 3.0** — persistent session per agent
-- **bubblewrap (bwrap)** — per-agent filesystem sandbox
-- **Bun ≥ 1.1** — runtime
-- **Claude Code CLI** — available on `$PATH` (tmux sessions invoke it)
+One command. Installs Bun, tmux, bubblewrap, clones HQ, compiles the
+binary into `~/.local/bin/hq`, and fixes the Ubuntu 24+ user-namespace
+tweak if needed:
 
 ```bash
-# Debian / Ubuntu
-sudo apt install -y tmux bubblewrap
-curl -fsSL https://bun.sh/install | bash
-
-# Ubuntu 24.04+: allow user namespaces for bwrap
-echo "kernel.apparmor_restrict_unprivileged_userns = 0" \
-  | sudo tee /etc/sysctl.d/60-userns.conf
-sudo sysctl --system
-
-# HQ from sources
-git clone <this-repo> && cd HQ
-bun install
-cd packages/cli && bun link      # exposes `hq` on your PATH
+curl -fsSL https://raw.githubusercontent.com/Teyk0o/hq/main/install.sh | bash
 ```
 
-Or, once a compiled binary is published:
+You still need the [Claude Code CLI](https://claude.com/claude-code) on
+your PATH — HQ spawns it for every heartbeat. The installer warns if
+it's missing.
+
+### What it installs
+
+- **Bun ≥ 1.1** — runtime (via the official installer if missing)
+- **tmux ≥ 3.0** — persistent session per agent (apt / dnf / brew)
+- **bubblewrap (bwrap)** — per-agent filesystem sandbox (Linux only)
+- **HQ** itself — cloned into `~/.local/share/hq`, compiled into
+  `~/.local/bin/hq`
+
+### Overrides
 
 ```bash
-bun run build:bin
-install -m0755 dist/hq ~/.local/bin/hq
+HQ_DIR=~/code/hq HQ_REF=dev bash <(curl -fsSL .../install.sh)
 ```
+
+- `HQ_DIR` — where to clone (default `~/.local/share/hq`)
+- `HQ_REF` — git ref to check out (default `main`)
+
+### From a local clone
+
+```bash
+cd HQ
+./install.sh
+```
+
+The script is idempotent — re-running it updates HQ in place.
 
 ---
 
