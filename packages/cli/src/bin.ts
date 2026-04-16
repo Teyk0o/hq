@@ -20,7 +20,10 @@ import { usageCommand } from './commands/usage';
 import { listProjects, unregisterProject } from './registry';
 
 const program = new Command();
-program.name('hq').description('Autonomous agent teams orchestrator').version('0.1.0');
+program
+  .name('hq')
+  .description('HeadQuarter — a local command center for autonomous Claude Code teams')
+  .version('0.1.0');
 
 program
   .command('init [path]')

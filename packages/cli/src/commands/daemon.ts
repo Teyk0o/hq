@@ -15,7 +15,18 @@ import { getSharedBus } from '@hq/mcp';
 import { startUi } from '@hq/ui';
 import { listProjects } from '../registry';
 
+const BANNER = `\x1b[38;5;173m
+          ██╗  ██╗ ██████╗
+          ██║  ██║██╔═══██╗
+          ███████║██║   ██║
+          ██╔══██║██║▄▄ ██║
+          ██║  ██║╚██████╔╝
+          ╚═╝  ╚═╝ ╚══▀▀═╝\x1b[0m
+          \x1b[1mHeadQuarter\x1b[0m — agent orchestrator
+`;
+
 export async function daemonStart(): Promise<void> {
+  process.stdout.write(BANNER);
   const projects = listProjects().map((p) => ({ name: p.name, path: p.path }));
   if (projects.length === 0) {
     console.error('No projects registered. Run `hq init` in a project directory first.');

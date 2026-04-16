@@ -1,10 +1,32 @@
-# HQ
+<div align="center">
 
-> Orchestrator for autonomous teams of Claude Code agents.
+```
+          ██╗  ██╗ ██████╗
+          ██║  ██║██╔═══██╗
+          ███████║██║   ██║
+          ██╔══██║██║▄▄ ██║
+          ██║  ██║╚██████╔╝
+          ╚═╝  ╚═╝ ╚══▀▀═╝
+```
 
-HQ runs a team of Claude Code agents on one or more local projects, like
-a real team: workers that claim tasks, reviewers that check before merge,
-a boss that plans from goals, and you approving the output. Agents message
+# HeadQuarter
+
+**A local command center for autonomous Claude Code teams.**
+
+[![CI](https://github.com/Teyk0o/hq/actions/workflows/ci.yml/badge.svg)](https://github.com/Teyk0o/hq/actions/workflows/ci.yml)
+[![Runtime](https://img.shields.io/badge/runtime-Bun%201.1%2B-f9f1e1?logo=bun&logoColor=black)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Tests](https://img.shields.io/badge/tests-104%20passing-4b7f67)](./packages)
+[![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-cc785c)](https://claude.com/claude-code)
+[![Status](https://img.shields.io/badge/status-v1%20ready-cc785c)](#install)
+
+</div>
+
+---
+
+HeadQuarter (`hq`) runs a team of Claude Code agents on your local projects,
+like a real team: **workers** claim tasks, **reviewers** check before merge,
+a **boss** plans from goals, and you approve the output. Agents message
 each other, peer-review each other, and everything moves live in a local
 web dashboard.
 
@@ -63,8 +85,8 @@ daemon listens on the event bus and wakes reviewers event-driven.
 
 ## Documentation
 
-- **[docs/GUIDE.md](./docs/GUIDE.md)** — full human guide: concepts,
-  CLI, configuration, roles, rules, daemon, integrations, admin, SOUL
+- **[docs/GUIDE.md](./docs/GUIDE.md)** — full human guide: concepts, CLI,
+  configuration, roles, rules, daemon, integrations, admin, SOUL
   templates, troubleshooting, example 9-agent startup team
 - **[docs/CLAUDE.md](./docs/CLAUDE.md)** — reference for Claude agents
   asked to set up HQ on a project (tool reference, protocol, recipes,
@@ -81,3 +103,11 @@ pnpm build:bin        # compile a single binary to dist/hq
 ```
 
 CI runs the same pipeline on every PR.
+
+---
+
+<div align="center">
+
+Made to be bossed around.
+
+</div>

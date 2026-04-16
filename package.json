@@ -2,7 +2,7 @@
   "name": "hq",
   "version": "0.0.0",
   "private": true,
-  "description": "Autonomous agent teams orchestrator — local Trello + live kanban + tmux-driven Claude Code sessions",
+  "description": "HeadQuarter — a local command center for autonomous Claude Code teams",
   "type": "module",
   "packageManager": "pnpm@9.12.0",
   "engines": {
