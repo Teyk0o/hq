@@ -1,24 +1,32 @@
 <div align="center">
 
 ```
-          ██╗  ██╗ ██████╗
-          ██║  ██║██╔═══██╗
-          ███████║██║   ██║
-          ██╔══██║██║▄▄ ██║
-          ██║  ██║╚██████╔╝
-          ╚═╝  ╚═╝ ╚══▀▀═╝
+██╗  ██╗███████╗ █████╗ ██████╗  ██████╗ ██╗   ██╗ █████╗ ██████╗ ████████╗███████╗██████╗
+██║  ██║██╔════╝██╔══██╗██╔══██╗██╔═══██╗██║   ██║██╔══██╗██╔══██╗╚══██╔══╝██╔════╝██╔══██╗
+███████║█████╗  ███████║██║  ██║██║   ██║██║   ██║███████║██████╔╝   ██║   █████╗  ██████╔╝
+██╔══██║██╔══╝  ██╔══██║██║  ██║██║▄▄ ██║██║   ██║██╔══██║██╔══██╗   ██║   ██╔══╝  ██╔══██╗
+██║  ██║███████╗██║  ██║██████╔╝╚██████╔╝╚██████╔╝██║  ██║██║  ██║   ██║   ███████╗██║  ██║
+╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═════╝  ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
 ```
-
-# HeadQuarter
 
 **A local command center for autonomous Claude Code teams.**
 
-[![CI](https://github.com/Teyk0o/hq/actions/workflows/ci.yml/badge.svg)](https://github.com/Teyk0o/hq/actions/workflows/ci.yml)
-[![Runtime](https://img.shields.io/badge/runtime-Bun%201.1%2B-f9f1e1?logo=bun&logoColor=black)](https://bun.sh)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/tests-104%20passing-4b7f67)](./packages)
-[![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-cc785c)](https://claude.com/claude-code)
-[![Status](https://img.shields.io/badge/status-v1%20ready-cc785c)](#install)
+[![CI](https://img.shields.io/github/actions/workflow/status/Teyk0o/hq/ci.yml?style=for-the-badge&logo=github-actions&logoColor=white&label=CI)](https://github.com/Teyk0o/hq/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/Teyk0o/hq?style=for-the-badge&logo=github&color=cc785c&logoColor=white)](https://github.com/Teyk0o/hq/stargazers)
+[![Tests](https://img.shields.io/badge/tests-104%20passing-4b7f67?style=for-the-badge&logo=bun&logoColor=white)](./packages)
+
+[![Claude](https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=claude&logoColor=white)](https://claude.com/claude-code)
+[![Bun](https://img.shields.io/badge/bun-282a36?style=for-the-badge&logo=bun&logoColor=fbf0df)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Hono](https://img.shields.io/badge/hono-E36002?style=for-the-badge&logo=hono&logoColor=white)](https://hono.dev)
+[![SQLite](https://img.shields.io/badge/Sqlite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org)
+[![Drizzle](https://img.shields.io/badge/drizzle-C5F74F?style=for-the-badge&logo=drizzle&logoColor=black)](https://orm.drizzle.team)
+
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
+[![htmx](https://img.shields.io/badge/%3C/%3E%20htmx-3D72D7?style=for-the-badge&logo=mysl&logoColor=white)](https://htmx.org)
+[![Zod](https://img.shields.io/badge/Zod-000000?style=for-the-badge&logo=zod&logoColor=3068B7)](https://zod.dev)
+[![tmux](https://img.shields.io/badge/tmux-1BB91F?style=for-the-badge&logo=tmux&logoColor=white)](https://github.com/tmux/tmux)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://www.kernel.org)
 
 </div>
 

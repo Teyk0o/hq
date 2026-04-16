@@ -15,18 +15,31 @@ import { getSharedBus } from '@hq/mcp';
 import { startUi } from '@hq/ui';
 import { listProjects } from '../registry';
 
-const BANNER = `\x1b[38;5;173m
-          ██╗  ██╗ ██████╗
-          ██║  ██║██╔═══██╗
-          ███████║██║   ██║
-          ██╔══██║██║▄▄ ██║
-          ██║  ██║╚██████╔╝
-          ╚═╝  ╚═╝ ╚══▀▀═╝\x1b[0m
-          \x1b[1mHeadQuarter\x1b[0m — agent orchestrator
+const ORANGE = '\x1b[38;5;173m';
+const RESET = '\x1b[0m';
+const BOLD = '\x1b[1m';
+const DIM = '\x1b[2m';
+
+const BANNER_WIDE = `${ORANGE}
+██╗  ██╗███████╗ █████╗ ██████╗  ██████╗ ██╗   ██╗ █████╗ ██████╗ ████████╗███████╗██████╗
+██║  ██║██╔════╝██╔══██╗██╔══██╗██╔═══██╗██║   ██║██╔══██╗██╔══██╗╚══██╔══╝██╔════╝██╔══██╗
+███████║█████╗  ███████║██║  ██║██║   ██║██║   ██║███████║██████╔╝   ██║   █████╗  ██████╔╝
+██╔══██║██╔══╝  ██╔══██║██║  ██║██║▄▄ ██║██║   ██║██╔══██║██╔══██╗   ██║   ██╔══╝  ██╔══██╗
+██║  ██║███████╗██║  ██║██████╔╝╚██████╔╝╚██████╔╝██║  ██║██║  ██║   ██║   ███████╗██║  ██║
+╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═════╝  ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝${RESET}
+${DIM}a local command center for autonomous Claude Code teams${RESET}
+
 `;
 
+const BANNER_NARROW = `${ORANGE}${BOLD}HeadQuarter${RESET} ${DIM}— agent orchestrator${RESET}\n\n`;
+
+function printBanner(): void {
+  const cols = process.stdout.columns ?? 80;
+  process.stdout.write(cols >= 95 ? BANNER_WIDE : BANNER_NARROW);
+}
+
 export async function daemonStart(): Promise<void> {
-  process.stdout.write(BANNER);
+  printBanner();
   const projects = listProjects().map((p) => ({ name: p.name, path: p.path }));
   if (projects.length === 0) {
     console.error('No projects registered. Run `hq init` in a project directory first.');
