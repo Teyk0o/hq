@@ -155,7 +155,7 @@ export function createApp(options: UiServerOptions): Hono {
         <div
           id="board"
           hx-get={`/board/inner?${queryParams.toString()}`}
-          hx-trigger="sse:task.status_changed from:body, sse:task.created from:body, sse:task.claimed from:body, sse:task.commented from:body, sse:task.reviewed from:body, sse:task.blocked from:body, sse:task.unblocked from:body, sse:task.pushed from:body"
+          hx-trigger="sse:task.status_changed from:body, sse:task.created from:body, sse:task.claimed from:body, sse:task.blocked from:body, sse:task.unblocked from:body, sse:task.pushed from:body"
           hx-swap="innerHTML"
         >
           <Kanban tasks={tasks} project={project} agents={agents} />
@@ -396,8 +396,47 @@ export function createApp(options: UiServerOptions): Hono {
       author: 'human',
       comment_id: commentId,
     });
-    return c.redirect(`/task/${id}?project=${project}`);
+    // Re-render the drawer in place rather than redirecting — redirects feel
+    // like full-page reloads to the user.
+    const refreshed = await renderTaskDrawer(project, id);
+    if (!refreshed) return c.json({ error: 'task disappeared' }, 404);
+    return c.html(refreshed);
   });
+
+  /** Shared renderer so /task/:id GET and POST comment return the same HTML. */
+  const renderTaskDrawer = async (project: string, id: string) => {
+    const projectPath = options.projects[project];
+    const db = openDb(project);
+    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as
+      | (KanbanTask & { description?: string; branch?: string | null })
+      | null;
+    if (!task) {
+      db.close();
+      return null;
+    }
+    const comments = db
+      .prepare('SELECT author, body, created_at FROM comments WHERE task_id = ? ORDER BY created_at')
+      .all(id) as Array<{ author: string; body: string; created_at: number }>;
+    const reviews = db
+      .prepare(
+        'SELECT reviewer, verdict, body, created_at FROM reviews WHERE task_id = ? ORDER BY created_at',
+      )
+      .all(id) as Array<{ reviewer: string; verdict: string; body: string; created_at: number }>;
+    db.close();
+    const commits =
+      projectPath && task.branch ? gitCommitsForBranch(projectPath, task.branch) : [];
+    const agents = await loadAgentPresentations(project);
+    return (
+      <TaskDrawer
+        task={task}
+        comments={comments}
+        reviews={reviews}
+        commits={commits}
+        project={project}
+        agents={agents}
+      />
+    );
+  };
 
   app.post('/api/tasks/:id/approve', (c) => {
     const id = c.req.param('id');

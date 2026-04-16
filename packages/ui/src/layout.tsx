@@ -29,7 +29,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       />
       <script src="https://cdn.tailwindcss.com"></script>
       <script src="https://unpkg.com/lucide@latest"></script>
@@ -64,10 +64,13 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
             color: var(--ink);
             font-family: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
             font-feature-settings: 'ss01','cv11';
+            font-size: 15px;
+            line-height: 1.5;
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
           }
-          h1, h2, .serif { font-family: 'Fraunces', Georgia, serif; letter-spacing: -0.01em; }
-          .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+          h1, h2, h3 { letter-spacing: -0.015em; }
+          .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: -0.01em; }
           .text-muted { color: var(--ink-muted); }
           .text-faint { color: var(--ink-faint); }
           .border-soft { border-color: var(--border); }
@@ -84,32 +87,39 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           }
           .card:hover { box-shadow: 0 4px 20px rgba(31,30,26,0.06); }
           .btn {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 500;
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 9px 16px; border-radius: 10px; font-size: 14px; font-weight: 500;
             border: 1px solid var(--border); background: var(--surface);
-            transition: background 120ms, border-color 120ms;
+            transition: background 120ms, border-color 120ms, transform 80ms;
+            white-space: nowrap;
           }
           .btn:hover { background: var(--surface-alt); }
+          .btn:active { transform: scale(0.98); }
           .btn-primary {
             background: var(--accent); color: #fff; border-color: var(--accent);
           }
           .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
           .btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
           .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+          .btn-sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
           .pill {
-            display: inline-flex; align-items: center; gap: 4px;
-            padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 500;
-            border: 1px solid var(--border);
+            display: inline-flex; align-items: center; gap: 5px; height: 28px;
+            padding: 0 11px; border-radius: 999px; font-size: 13px; font-weight: 500;
+            border: 1px solid var(--border); color: var(--ink-muted);
+            transition: background 120ms, color 120ms, border-color 120ms;
           }
+          .pill:hover { background: var(--surface-alt); color: var(--ink); }
           .pill-active { background: var(--accent); color: #fff; border-color: var(--accent); }
+          .pill-active:hover { background: var(--accent-hover); color: #fff; }
           .field {
-            width: 100%; padding: 9px 12px; border-radius: 10px;
+            width: 100%; height: 38px; padding: 0 12px; border-radius: 10px;
             border: 1px solid var(--border); background: var(--surface);
-            font-size: 13px; color: var(--ink); outline: none;
-            transition: border-color 120ms;
+            font-size: 14px; color: var(--ink); outline: none;
+            transition: border-color 120ms, box-shadow 120ms;
           }
           .field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-          textarea.field { resize: vertical; min-height: 68px; }
+          textarea.field { resize: vertical; min-height: 80px; height: auto; padding: 10px 12px; }
+          select.field { padding-right: 28px; }
 
           /* Animations */
           .swap-in { animation: swapIn 200ms ease-out; }
@@ -140,9 +150,9 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           @keyframes pulse { 0% { transform: scale(1); opacity: 0.35; } 100% { transform: scale(2); opacity: 0; } }
 
           /* Lucide icon sizing defaults */
-          [data-lucide] { width: 16px; height: 16px; stroke-width: 2; }
-          .icon-sm [data-lucide], [data-lucide].icon-sm { width: 14px; height: 14px; }
-          .icon-lg [data-lucide], [data-lucide].icon-lg { width: 20px; height: 20px; }
+          [data-lucide] { width: 18px; height: 18px; stroke-width: 2; flex-shrink: 0; }
+          .icon-sm [data-lucide], [data-lucide].icon-sm { width: 15px; height: 15px; }
+          .icon-lg [data-lucide], [data-lucide].icon-lg { width: 24px; height: 24px; }
         `,
         }}
       />
@@ -207,22 +217,22 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
     >
       <div class="flex min-h-screen">
         {/* Sidebar */}
-        <aside class="w-[260px] shrink-0 border-r border-soft" style="background: var(--surface-alt)">
-          <div class="p-4">
+        <aside class="w-[280px] shrink-0 border-r border-soft flex flex-col" style="background: var(--surface-alt)">
+          <div class="p-5 flex-1">
             <div class="flex items-center gap-2.5 px-1">
               <div
-                class="w-7 h-7 rounded-lg flex items-center justify-center text-white"
+                class="w-8 h-8 rounded-lg flex items-center justify-center text-white"
                 style="background: var(--accent)"
               >
                 <i data-lucide="sparkles"></i>
               </div>
-              <span class="font-semibold text-[15px] serif">HQ</span>
+              <span class="font-semibold text-[17px]">HQ</span>
             </div>
             {projects.length > 0 && (
-              <div class="mt-5">
-                <label class="text-[11px] uppercase tracking-wider text-faint px-1">Project</label>
+              <div class="mt-6">
+                <label class="text-[11px] font-semibold uppercase tracking-wider text-faint px-1">Project</label>
                 <select
-                  class="field mt-1.5 text-[13px]"
+                  class="field mt-2"
                   onchange="hqSwitchProject(this.value)"
                 >
                   {projects.map((p) => (
@@ -233,31 +243,31 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
                 </select>
               </div>
             )}
-            <nav class="mt-5 flex flex-col gap-0.5">
+            <nav class="mt-6 flex flex-col gap-1">
               <NavItem href={`/board?project=${project ?? ''}`} active={page === 'board'} icon="layout-grid" label="Board" />
               <NavItem href={`/agents?project=${project ?? ''}`} active={page === 'agents'} icon="users" label="Agents" />
               <NavItem href={`/inbox?project=${project ?? ''}`} active={page === 'inbox'} icon="inbox" label="Inbox" />
               <NavItem href={`/activity?project=${project ?? ''}`} active={page === 'activity'} icon="activity" label="Activity" />
             </nav>
-          </div>
 
-          <div class="px-4 mt-5">
-            <div class="text-[11px] uppercase tracking-wider text-faint px-1 mb-1.5">Team</div>
-            <div
-              id="sidebar-agents"
-              hx-get={`/agents/sidebar?project=${project ?? ''}`}
-              hx-trigger="load, sse:agent.status_changed from:body, sse:agent.heartbeat_started from:body, sse:agent.heartbeat_ended from:body"
-              hx-swap="innerHTML"
-            >
-              <div class="text-[12px] text-faint px-1 py-1">Loading…</div>
+            <div class="mt-7">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-faint px-1 mb-2">Team</div>
+              <div
+                id="sidebar-agents"
+                hx-get={`/agents/sidebar?project=${project ?? ''}`}
+                hx-trigger="load, sse:agent.status_changed from:body, sse:agent.heartbeat_started from:body, sse:agent.heartbeat_ended from:body"
+                hx-swap="innerHTML"
+              >
+                <div class="text-[13px] text-faint px-1 py-1">Loading…</div>
+              </div>
             </div>
           </div>
 
-          <div class="absolute bottom-5 left-5 right-5 w-[228px]">
+          <div class="p-5 border-t border-soft">
             <button
               hx-post="/api/daemon/pause"
               hx-swap="none"
-              class="btn w-full justify-center text-[12px]"
+              class="btn w-full justify-center"
               style="color: var(--danger); border-color: var(--danger-soft)"
             >
               <i data-lucide="pause"></i> Pause all agents
@@ -267,11 +277,11 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
 
         {/* Main */}
         <main class="flex-1 min-w-0">
-          <header class="px-8 py-5 flex items-center justify-between border-b border-soft" style="background: var(--bg)">
+          <header class="px-10 py-6 flex items-center justify-between border-b border-soft" style="background: var(--bg)">
             <div>
-              <h1 class="text-[24px] font-semibold leading-tight serif">{title}</h1>
+              <h1 class="text-[28px] font-semibold leading-tight">{title}</h1>
               {project && (
-                <p class="text-[12px] text-faint mt-1 mono flex items-center gap-1.5">
+                <p class="text-[13px] text-faint mt-1.5 mono flex items-center gap-1.5">
                   <i data-lucide="folder" class="icon-sm"></i>
                   {project}
                 </p>
@@ -284,10 +294,10 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
               hx-trigger="load, sse:claude.usage_updated from:body"
               hx-swap="innerHTML"
             >
-              <span class="text-[12px] text-faint">loading…</span>
+              <span class="text-[13px] text-faint">loading…</span>
             </div>
           </header>
-          <div class="px-8 py-6">{children}</div>
+          <div class="px-10 py-7">{children}</div>
         </main>
       </div>
 
@@ -305,10 +315,8 @@ const NavItem: FC<{ href: string; active: boolean; icon: string; label: string }
   <a
     href={href}
     class={
-      'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] transition-colors ' +
-      (active
-        ? 'font-medium'
-        : 'text-muted hover-bg')
+      'flex items-center gap-2.5 px-3 py-2 rounded-lg text-[14px] transition-colors ' +
+      (active ? 'font-semibold' : 'text-muted hover-bg')
     }
     style={active ? 'background: var(--accent-soft); color: var(--accent)' : ''}
   >

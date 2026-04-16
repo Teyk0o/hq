@@ -94,22 +94,26 @@ export const BoardHeader: FC<{
   assignees: string[];
   packages: string[];
 }> = ({ project, filters, assignees, packages }) => (
-  <div class="flex items-center justify-between gap-4 mb-5">
+  <div class="flex items-center justify-between gap-4 mb-6 flex-wrap">
     <FilterBar filters={filters} project={project} assignees={assignees} packages={packages} />
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2.5 shrink-0">
       <form action="/board" method="get" class="flex items-center">
         <input type="hidden" name="project" value={project} />
         {filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}
         {filters.priority && <input type="hidden" name="priority" value={String(filters.priority)} />}
         {filters.package && <input type="hidden" name="package" value={filters.package} />}
         <div class="relative">
-          <i data-lucide="search" class="icon-sm" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--ink-faint)"></i>
+          <i
+            data-lucide="search"
+            class="icon-sm"
+            style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink-faint)"
+          ></i>
           <input
             type="search"
             name="search"
             value={filters.search ?? ''}
             placeholder="Search tasks…"
-            class="field text-[12px] pl-8 w-56"
+            class="field pl-9 w-64"
           />
         </div>
       </form>
@@ -131,8 +135,8 @@ export const Kanban: FC<{ tasks: KanbanTask[]; project: string; agents: AgentPre
   agents,
 }) => (
   <div
-    class="grid gap-4 pb-4 overflow-x-auto swap-in"
-    style="grid-template-columns: repeat(7, minmax(270px, 1fr))"
+    class="grid gap-5 pb-4 overflow-x-auto swap-in"
+    style="grid-template-columns: repeat(7, minmax(280px, 1fr))"
   >
     {COLUMNS.map((col) => {
       const colTasks = tasks.filter((t) => t.status === col.state);
@@ -140,14 +144,14 @@ export const Kanban: FC<{ tasks: KanbanTask[]; project: string; agents: AgentPre
         <section class="flex flex-col">
           <header class="flex items-center gap-2 px-1 mb-3">
             <span class="inline-flex items-center justify-center" style={`color:${col.accent}`}>
-              <i data-lucide={col.icon} class="icon-sm"></i>
+              <i data-lucide={col.icon}></i>
             </span>
-            <h2 class="text-[13px] font-medium">{col.label}</h2>
-            <span class="text-[11px] text-faint mono ml-auto">{colTasks.length}</span>
+            <h2 class="text-[14px] font-semibold">{col.label}</h2>
+            <span class="text-[13px] text-faint mono ml-auto">{colTasks.length}</span>
           </header>
-          <div class="flex flex-col gap-2.5">
+          <div class="flex flex-col gap-3">
             {colTasks.length === 0 && (
-              <div class="text-[12px] text-faint py-4 px-1 text-center italic">Empty</div>
+              <div class="text-[13px] text-faint py-4 px-1 text-center italic">Empty</div>
             )}
             {colTasks.map((t) => (
               <TaskCard task={t} project={project} accent={col.accent} agents={agents} />
@@ -190,39 +194,39 @@ export const TaskCard: FC<{
   const prio = priorityPill(task.priority);
   return (
     <div
-      class="card p-3.5 cursor-pointer transition-shadow"
+      class="card p-4 cursor-pointer transition-shadow"
       style={`border-top: 3px solid ${accent}`}
       hx-get={`/task/${task.id}?project=${project}`}
       hx-target="#drawer"
       hx-swap="innerHTML"
     >
       <div class="flex items-start justify-between gap-2">
-        <span class="text-[13.5px] font-medium leading-snug">{task.title}</span>
+        <span class="text-[14px] font-medium leading-snug">{task.title}</span>
         <span
-          class="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full mono"
+          class="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full mono"
           style={`color:${prio.color}; background:${prio.bg}`}
         >
           {prio.label}
         </span>
       </div>
-      <div class="mt-3 flex items-center gap-2">
+      <div class="mt-3 flex items-center gap-2 flex-wrap">
         {task.assignee ? (
-          <span class="inline-flex items-center gap-1.5 text-[11px] text-muted">
-            <Avatar agent={agentFor(agents, task.assignee)} size={18} />
+          <span class="inline-flex items-center gap-1.5 text-[12px] text-muted">
+            <Avatar agent={agentFor(agents, task.assignee)} size={20} />
             {task.assignee}
           </span>
         ) : (
-          <span class="text-[11px] text-faint italic inline-flex items-center gap-1">
+          <span class="text-[12px] text-faint italic inline-flex items-center gap-1">
             <i data-lucide="user" class="icon-sm"></i>
             unassigned
           </span>
         )}
         {task.package && (
-          <span class="text-[10px] text-muted px-2 py-0.5 rounded-full border border-soft">
+          <span class="text-[11px] text-muted px-2 py-0.5 rounded-full border border-soft">
             {task.package}
           </span>
         )}
-        <span class="ml-auto text-[10px] text-faint mono">{task.id.slice(0, 6)}</span>
+        <span class="ml-auto text-[11px] text-faint mono">{task.id.slice(0, 6)}</span>
       </div>
     </div>
   );
@@ -244,7 +248,7 @@ const UsagePill: FC<{ label: string; pct: number }> = ({ label, pct }) => {
   const bg = pct >= 80 ? 'var(--danger-soft)' : pct >= 60 ? 'var(--warn-soft)' : 'var(--success-soft)';
   return (
     <span
-      class="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full"
+      class="inline-flex items-center gap-1.5 text-[13px] px-3 py-1 rounded-full"
       style={`color:${color}; background:${bg}`}
     >
       <span class="font-medium">{label}</span>
@@ -271,11 +275,11 @@ export const TaskDrawer: FC<{
 }> = ({ task, comments, reviews, commits, project, agents }) => {
   const statusAccent = COLUMNS.find((c) => c.state === task.status)?.accent ?? 'var(--ink-faint)';
   return (
-    <div class="drawer fixed right-0 top-0 h-full w-[480px] bg-white border-l border-soft overflow-y-auto z-30" style="background: var(--surface); box-shadow: -8px 0 32px rgba(31,30,26,0.06)">
-      <div class="sticky top-0 border-b border-soft px-6 py-3 flex items-center justify-between" style="background: var(--surface)">
-        <span class="text-[11px] text-faint mono">{task.id}</span>
+    <div class="drawer fixed right-0 top-0 h-full w-[520px] bg-white border-l border-soft overflow-y-auto z-30" style="background: var(--surface); box-shadow: -8px 0 32px rgba(31,30,26,0.06)">
+      <div class="sticky top-0 border-b border-soft px-7 py-4 flex items-center justify-between z-10" style="background: var(--surface)">
+        <span class="text-[12px] text-faint mono">{task.id}</span>
         <button
-          class="btn text-[12px] px-2 py-1"
+          class="btn btn-sm"
           hx-get="/drawer/empty"
           hx-target="#drawer"
           aria-label="close"
@@ -283,24 +287,24 @@ export const TaskDrawer: FC<{
           <i data-lucide="x"></i>
         </button>
       </div>
-      <div class="px-6 py-5">
-        <h2 class="text-[22px] font-semibold leading-tight serif">{task.title}</h2>
-        <div class="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+      <div class="px-7 py-6">
+        <h2 class="text-[24px] font-semibold leading-tight">{task.title}</h2>
+        <div class="mt-4 flex flex-wrap items-center gap-2">
           <span
-            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px]"
+            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-medium"
             style={`color:${statusAccent}; background: color-mix(in srgb, ${statusAccent} 18%, transparent)`}
           >
             <span class="w-1.5 h-1.5 rounded-full" style={`background:${statusAccent}`} />
             {COLUMNS.find((c) => c.state === task.status)?.label ?? task.status}
           </span>
           {task.assignee && (
-            <span class="inline-flex items-center gap-1.5 text-muted">
-              <Avatar agent={agentFor(agents, task.assignee)} size={18} />
+            <span class="inline-flex items-center gap-1.5 text-[13px] text-muted">
+              <Avatar agent={agentFor(agents, task.assignee)} size={20} />
               {task.assignee}
             </span>
           )}
           {task.branch && (
-            <span class="inline-flex items-center gap-1.5 text-muted mono text-[11px]">
+            <span class="inline-flex items-center gap-1.5 text-[12px] text-muted mono">
               <i data-lucide="git-branch" class="icon-sm"></i>
               {task.branch}
             </span>
@@ -308,11 +312,11 @@ export const TaskDrawer: FC<{
         </div>
 
         {task.description && (
-          <div class="mt-4 text-[13px] text-muted whitespace-pre-wrap leading-relaxed">{task.description}</div>
+          <div class="mt-5 text-[14px] text-muted whitespace-pre-wrap leading-relaxed">{task.description}</div>
         )}
 
         {task.status === 'review' && (
-          <div class="mt-5 flex gap-2">
+          <div class="mt-6 flex gap-2">
             <button
               class="btn btn-success flex-1 justify-center"
               hx-post={`/api/tasks/${task.id}/approve`}
@@ -331,7 +335,7 @@ export const TaskDrawer: FC<{
         )}
         {task.status === 'approved' && (
           <button
-            class="btn btn-primary mt-5 w-full justify-center"
+            class="btn btn-primary mt-6 w-full justify-center"
             hx-post={`/api/tasks/${task.id}/push`}
             hx-swap="none"
           >
@@ -340,76 +344,76 @@ export const TaskDrawer: FC<{
         )}
 
         {commits.length > 0 && (
-          <section class="mt-7">
-            <h3 class="text-[11px] uppercase tracking-wider text-faint mb-2 flex items-center gap-1.5">
+          <section class="mt-8">
+            <h3 class="text-[12px] font-semibold uppercase tracking-wider text-faint mb-3 flex items-center gap-1.5">
               <i data-lucide="git-commit" class="icon-sm"></i> Commits · <span class="mono">{commits.length}</span>
             </h3>
-            <ul class="space-y-1.5">
+            <ul class="space-y-2">
               {commits.map((c) => (
-                <li class="card px-3 py-2">
-                  <div class="flex items-center gap-2 text-[12px]">
+                <li class="card px-4 py-2.5">
+                  <div class="flex items-center gap-2 text-[13px]">
                     <span class="mono text-faint">{c.hash.slice(0, 7)}</span>
                     <span class="flex-1 truncate">{c.subject}</span>
-                    <span class="text-[10px] text-faint">{c.author}</span>
+                    <span class="text-[11px] text-faint">{c.author}</span>
                   </div>
-                  {c.stats && <div class="text-[11px] text-faint mono mt-0.5">{c.stats}</div>}
+                  {c.stats && <div class="text-[12px] text-faint mono mt-1">{c.stats}</div>}
                 </li>
               ))}
             </ul>
           </section>
         )}
 
-        <section class="mt-7">
-          <h3 class="text-[11px] uppercase tracking-wider text-faint mb-2 flex items-center gap-1.5">
+        <section class="mt-8">
+          <h3 class="text-[12px] font-semibold uppercase tracking-wider text-faint mb-3 flex items-center gap-1.5">
             <i data-lucide="message-square-check" class="icon-sm"></i> Reviews · <span class="mono">{reviews.length}</span>
           </h3>
           {reviews.length === 0 ? (
-            <p class="text-[12px] text-faint italic">No reviews yet.</p>
+            <p class="text-[13px] text-faint italic">No reviews yet.</p>
           ) : (
-            <ul class="space-y-2">
+            <ul class="space-y-2.5">
               {reviews.map((r) => (
-                <li class="card p-3">
-                  <div class="flex items-center gap-2 mb-1">
-                    <Avatar agent={agentFor(agents, r.reviewer)} size={18} />
-                    <span class="font-medium text-[13px]">{r.reviewer}</span>
+                <li class="card p-4">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Avatar agent={agentFor(agents, r.reviewer)} size={22} />
+                    <span class="font-medium text-[14px]">{r.reviewer}</span>
                     <span class="ml-auto"><VerdictBadge verdict={r.verdict} /></span>
                   </div>
-                  {r.body && <div class="text-[13px] text-muted whitespace-pre-wrap">{r.body}</div>}
+                  {r.body && <div class="text-[14px] text-muted whitespace-pre-wrap">{r.body}</div>}
                 </li>
               ))}
             </ul>
           )}
         </section>
 
-        <section class="mt-7">
-          <h3 class="text-[11px] uppercase tracking-wider text-faint mb-2 flex items-center gap-1.5">
+        <section class="mt-8">
+          <h3 class="text-[12px] font-semibold uppercase tracking-wider text-faint mb-3 flex items-center gap-1.5">
             <i data-lucide="message-circle" class="icon-sm"></i> Comments · <span class="mono">{comments.length}</span>
           </h3>
           {comments.length === 0 ? (
-            <p class="text-[12px] text-faint italic mb-3">No comments.</p>
+            <p class="text-[13px] text-faint italic mb-3">No comments.</p>
           ) : (
-            <ul class="space-y-2 mb-3">
+            <ul class="space-y-2.5 mb-3">
               {comments.map((c) => {
                 const isHuman = c.author === 'human';
                 return (
-                  <li class="card p-3">
-                    <div class="flex items-center gap-2 mb-1">
+                  <li class="card p-4">
+                    <div class="flex items-center gap-2 mb-2">
                       {isHuman ? (
                         <span
-                          class="w-[18px] h-[18px] rounded-full flex items-center justify-center text-white"
+                          class="w-[22px] h-[22px] rounded-full flex items-center justify-center text-white"
                           style="background: var(--accent)"
                         >
-                          <i data-lucide="user" class="icon-sm" style="width:10px;height:10px"></i>
+                          <i data-lucide="user" class="icon-sm" style="width:12px;height:12px"></i>
                         </span>
                       ) : (
-                        <Avatar agent={agentFor(agents, c.author)} size={18} />
+                        <Avatar agent={agentFor(agents, c.author)} size={22} />
                       )}
-                      <span class="font-medium text-[13px]">{c.author}</span>
-                      <span class="ml-auto text-[10px] text-faint mono">
+                      <span class="font-medium text-[14px]">{c.author}</span>
+                      <span class="ml-auto text-[11px] text-faint mono">
                         {new Date(c.created_at).toLocaleString()}
                       </span>
                     </div>
-                    <div class="text-[13px] text-muted whitespace-pre-wrap">{c.body}</div>
+                    <div class="text-[14px] text-muted whitespace-pre-wrap">{c.body}</div>
                   </li>
                 );
               })}
@@ -424,7 +428,7 @@ export const TaskDrawer: FC<{
             <textarea
               name="body"
               required
-              rows={2}
+              rows={3}
               class="field"
               placeholder="Add a comment (use @name to notify)…"
             ></textarea>
@@ -448,7 +452,7 @@ const VerdictBadge: FC<{ verdict: string }> = ({ verdict }) => {
   const icon = ok ? 'check' : 'x';
   return (
     <span
-      class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+      class="inline-flex items-center gap-1 text-[12px] px-2.5 py-0.5 rounded-full font-medium"
       style={`color:${color}; background:${bg}`}
     >
       <i data-lucide={icon} class="icon-sm"></i>
@@ -458,33 +462,34 @@ const VerdictBadge: FC<{ verdict: string }> = ({ verdict }) => {
 };
 
 export const TaskCreateForm: FC<{ project: string }> = ({ project }) => (
-  <div class="drawer fixed right-0 top-0 h-full w-[480px] border-l border-soft overflow-y-auto z-30" style="background: var(--surface); box-shadow: -8px 0 32px rgba(31,30,26,0.06)">
-    <div class="sticky top-0 border-b border-soft px-6 py-3 flex items-center justify-between" style="background: var(--surface)">
-      <span class="text-[13px] font-semibold flex items-center gap-1.5">
+  <div class="drawer fixed right-0 top-0 h-full w-[520px] border-l border-soft overflow-y-auto z-30" style="background: var(--surface); box-shadow: -8px 0 32px rgba(31,30,26,0.06)">
+    <div class="sticky top-0 border-b border-soft px-7 py-4 flex items-center justify-between z-10" style="background: var(--surface)">
+      <span class="text-[15px] font-semibold flex items-center gap-2">
         <i data-lucide="plus-circle"></i> New task
       </span>
-      <button class="btn text-[12px] px-2 py-1" hx-get="/drawer/empty" hx-target="#drawer">
+      <button class="btn btn-sm" hx-get="/drawer/empty" hx-target="#drawer">
         <i data-lucide="x"></i>
       </button>
     </div>
     <form
-      class="px-6 py-5 flex flex-col gap-4"
+      class="px-7 py-6 flex flex-col gap-5"
       hx-post={`/api/tasks?project=${project}`}
       hx-swap="innerHTML"
       hx-target="#drawer"
     >
-      <label class="flex flex-col gap-1.5">
-        <span class="text-[11px] uppercase tracking-wider text-faint">Title</span>
+      <label class="flex flex-col gap-2">
+        <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Title</span>
         <input
           name="title"
           required
           autofocus
-          class="field text-[14px]"
+          class="field"
           placeholder="What should be done?"
+          style="height:44px;font-size:15px"
         />
       </label>
-      <label class="flex flex-col gap-1.5">
-        <span class="text-[11px] uppercase tracking-wider text-faint">Description</span>
+      <label class="flex flex-col gap-2">
+        <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Description</span>
         <textarea
           name="description"
           rows={5}
@@ -492,9 +497,9 @@ export const TaskCreateForm: FC<{ project: string }> = ({ project }) => (
           placeholder="Optional context, acceptance criteria, or references."
         ></textarea>
       </label>
-      <div class="grid grid-cols-2 gap-3">
-        <label class="flex flex-col gap-1.5">
-          <span class="text-[11px] uppercase tracking-wider text-faint">Priority</span>
+      <div class="grid grid-cols-2 gap-4">
+        <label class="flex flex-col gap-2">
+          <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Priority</span>
           <select name="priority" class="field">
             <option value="1">P1 — urgent</option>
             <option value="2">P2 — high</option>
@@ -503,19 +508,19 @@ export const TaskCreateForm: FC<{ project: string }> = ({ project }) => (
             <option value="5">P5 — backlog</option>
           </select>
         </label>
-        <label class="flex flex-col gap-1.5">
-          <span class="text-[11px] uppercase tracking-wider text-faint">Package</span>
+        <label class="flex flex-col gap-2">
+          <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Package</span>
           <input name="package" class="field" placeholder="optional tag" />
         </label>
       </div>
-      <label class="flex flex-col gap-1.5">
-        <span class="text-[11px] uppercase tracking-wider text-faint">Status</span>
+      <label class="flex flex-col gap-2">
+        <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Status</span>
         <select name="status" class="field">
           <option value="todo" selected>To do — immediately claimable</option>
           <option value="backlog">Backlog — boss promotes later</option>
         </select>
       </label>
-      <div class="flex gap-2 mt-1">
+      <div class="flex gap-2 mt-2">
         <button type="submit" class="btn btn-primary flex-1 justify-center">
           <i data-lucide="plus"></i> Create task
         </button>
@@ -539,38 +544,38 @@ export const Inbox: FC<{
   }>;
   agents: AgentPresentation[];
 }> = ({ messages, agents }) => (
-  <ul class="space-y-3 max-w-3xl">
+  <ul class="space-y-3 max-w-4xl">
     {messages.length === 0 && (
-      <li class="text-[13px] text-faint py-8 text-center">
+      <li class="text-[14px] text-faint py-10 text-center">
         <i data-lucide="inbox" class="icon-lg" style="color:var(--ink-faint)"></i>
-        <div class="mt-2">No messages yet.</div>
+        <div class="mt-3">No messages yet.</div>
       </li>
     )}
     {messages.map((m) => {
       const isBroadcast = m.to_agent === '*';
       return (
-        <li class="card p-4">
-          <div class="flex items-center gap-2.5 mb-2">
-            <Avatar agent={agentFor(agents, m.from_agent)} size={28} />
+        <li class="card p-5">
+          <div class="flex items-center gap-3 mb-3">
+            <Avatar agent={agentFor(agents, m.from_agent)} size={32} />
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 text-[13px]">
-                <span class="font-medium">{m.from_agent}</span>
+              <div class="flex items-center gap-2 text-[14px]">
+                <span class="font-semibold">{m.from_agent}</span>
                 <i data-lucide="arrow-right" class="icon-sm" style="color:var(--ink-faint)"></i>
                 {isBroadcast ? (
                   <span class="text-muted font-medium">everyone</span>
                 ) : (
                   <span class="text-muted inline-flex items-center gap-1.5">
-                    <Avatar agent={agentFor(agents, m.to_agent)} size={16} /> {m.to_agent}
+                    <Avatar agent={agentFor(agents, m.to_agent)} size={18} /> {m.to_agent}
                   </span>
                 )}
               </div>
-              {m.subject && <div class="text-[13px] font-medium mt-0.5">{m.subject}</div>}
+              {m.subject && <div class="text-[14px] font-medium mt-0.5">{m.subject}</div>}
             </div>
-            <span class="text-[11px] text-faint mono">
+            <span class="text-[12px] text-faint mono">
               {new Date(m.created_at).toLocaleString()}
             </span>
           </div>
-          <div class="text-[13px] text-muted whitespace-pre-wrap leading-relaxed">{m.body}</div>
+          <div class="text-[14px] text-muted whitespace-pre-wrap leading-relaxed">{m.body}</div>
         </li>
       );
     })}
@@ -590,33 +595,33 @@ export const ActivityFeed: FC<{
     return 'dot';
   };
   return (
-    <ul class="space-y-1 max-w-3xl">
+    <ul class="space-y-1 max-w-4xl">
       {items.length === 0 && (
-        <li class="text-[13px] text-faint py-8 text-center">No activity yet.</li>
+        <li class="text-[14px] text-faint py-10 text-center">No activity yet.</li>
       )}
       {items.map((i) => {
         const isHuman = i.agent === 'human';
         return (
-          <li class="flex items-center gap-3 px-3 py-2 rounded-lg hover-bg">
-            <i data-lucide={actionIcon(i.action)} class="icon-sm" style="color:var(--ink-faint)"></i>
+          <li class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover-bg">
+            <i data-lucide={actionIcon(i.action)} style="color:var(--ink-faint)"></i>
             {isHuman ? (
               <span
-                class="w-6 h-6 rounded-full flex items-center justify-center text-white"
+                class="w-7 h-7 rounded-full flex items-center justify-center text-white"
                 style="background: var(--accent)"
               >
-                <i data-lucide="user" class="icon-sm" style="width:12px;height:12px"></i>
+                <i data-lucide="user" class="icon-sm" style="width:14px;height:14px"></i>
               </span>
             ) : (
-              <Avatar agent={agentFor(agents, i.agent)} size={24} />
+              <Avatar agent={agentFor(agents, i.agent)} size={28} />
             )}
-            <div class="flex-1 min-w-0 text-[13px]">
+            <div class="flex-1 min-w-0 text-[14px]">
               <span class="font-medium">{i.agent}</span>{' '}
               <span class="text-muted">{i.action}</span>
               {i.task_id && (
-                <span class="ml-2 text-faint mono text-[11px]">{i.task_id.slice(0, 6)}</span>
+                <span class="ml-2 text-faint mono text-[12px]">{i.task_id.slice(0, 6)}</span>
               )}
             </div>
-            <span class="text-[11px] text-faint mono shrink-0">
+            <span class="text-[12px] text-faint mono shrink-0">
               {new Date(i.created_at).toLocaleString()}
             </span>
           </li>
@@ -657,18 +662,18 @@ export const AgentsList: FC<{
           ? Math.min(100, Math.round((a.tokens_today / a.tokens_budget) * 100))
           : 0;
       return (
-        <div class="card p-5">
-          <div class="flex items-center gap-3">
-            <Avatar agent={a} size={44} />
+        <div class="card p-6">
+          <div class="flex items-center gap-4">
+            <Avatar agent={a} size={52} />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <span class="font-semibold text-[15px]">{a.name}</span>
+                <span class="font-semibold text-[16px]">{a.name}</span>
                 <span
                   class={`w-2 h-2 rounded-full ${a.status === 'working' ? 'pulse-dot' : ''}`}
                   style={`background:${statusColor}`}
                 />
               </div>
-              <div class="text-[11px] text-faint mt-0.5 capitalize">
+              <div class="text-[12px] text-faint mt-1 capitalize">
                 {a.status.replace(/_/g, ' ')}
                 {a.last_heartbeat && (
                   <span class="ml-1.5 mono">
@@ -679,18 +684,18 @@ export const AgentsList: FC<{
             </div>
           </div>
           {a.current_task_id && (
-            <div class="mt-4 text-[12px] text-muted inline-flex items-center gap-1.5">
+            <div class="mt-4 text-[13px] text-muted inline-flex items-center gap-1.5">
               <i data-lucide="loader" class="icon-sm"></i>
               Working on <span class="mono">{a.current_task_id.slice(0, 6)}</span>
             </div>
           )}
           {a.tokens_budget > 0 && (
             <div class="mt-4">
-              <div class="flex justify-between text-[11px] text-faint mb-1">
+              <div class="flex justify-between text-[12px] text-faint mb-1.5">
                 <span>Daily tokens</span>
                 <span class="mono">{pct}%</span>
               </div>
-              <div class="h-1 rounded-full" style="background: var(--surface-alt)">
+              <div class="h-1.5 rounded-full" style="background: var(--surface-alt)">
                 <div
                   class="h-full rounded-full transition-all"
                   style={`width:${pct}%; background: var(--accent)`}
@@ -708,7 +713,7 @@ export const SidebarAgents: FC<{
   agents: Array<{ name: string; gender?: GenderHint; status: string }>;
 }> = ({ agents }) => (
   <ul class="flex flex-col gap-0.5">
-    {agents.length === 0 && <li class="text-[12px] text-faint px-1 py-1">No agents</li>}
+    {agents.length === 0 && <li class="text-[13px] text-faint px-1 py-1">No agents</li>}
     {agents.map((a) => {
       const statusColor =
         a.status === 'working'
@@ -719,11 +724,11 @@ export const SidebarAgents: FC<{
               ? 'var(--ink-faint)'
               : 'var(--success)';
       return (
-        <li class="flex items-center gap-2 px-2 py-1 text-[13px] hover-bg rounded-md">
-          <Avatar agent={a} size={20} />
+        <li class="flex items-center gap-2.5 px-2.5 py-1.5 text-[14px] hover-bg rounded-lg">
+          <Avatar agent={a} size={24} />
           <span class="flex-1 truncate">{a.name}</span>
           <span
-            class={`w-1.5 h-1.5 rounded-full ${a.status === 'working' ? 'pulse-dot' : ''}`}
+            class={`w-2 h-2 rounded-full ${a.status === 'working' ? 'pulse-dot' : ''}`}
             style={`background:${statusColor}`}
           />
         </li>
