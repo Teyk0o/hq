@@ -116,37 +116,146 @@
 
 ---
 
-## Sprints proposés
+## Sprints
 
-### Sprint A — faire fonctionner pour de vrai
+### ✅ Sprint A — faire fonctionner pour de vrai
 
-- 1 Scheduler cron activé
-- 2-3 Peer-review auto-transitions
-- 4 Goals→tasks (minimum viable)
-- 17 Migrations propres
-- 18 Cleanup tmux orphelines
-- 20 Erreurs MCP structurées
+Items 1, 2-3, 4, 11, 17, 18, 20. Scheduler cron, peer-review auto-gates,
+goals→tasks, claim locking race-free, migrations, tmux reaper, MCP errors
+structured.
 
-### Sprint B — human UX
+### ✅ Sprint B — human UX
 
-- 21 Task creation UI
-- 23 Filtres board
-- 25 Comments humains
-- 15 Git diff dans drawer
-- 32 Error toasts
-- 33 Inbox messages
+Items 15, 21, 23, 24, 25, 32, 33. Task creation UI, filtres board, search,
+comments humains, git diff dans drawer, error toasts, inbox.
 
-### Sprint C — safety
+### ✅ Sprint C — safety
 
-- 8 Rules engine réel
-- 9 Transactions
-- 10 Audit log
-- 11 Claim locking
+Items 8, 9, 10, 11. Rules engine compilé, transactions, audit log, claim
+locking.
 
-### Sprint D — ops & v1 ship
+### ✅ Sprint D — ops & v1 ship
 
-- 39 Discord testé
-- 50 systemd testé
-- 54 Mobile-friendly
-- 55-58 Docs
-- 60-62 Tests de base
+Items 39, 50, 54, 55-58, 60-62. Discord webhook, mobile-friendly, docs
+utilisateur, tests unitaires, CI GitHub Actions.
+
+---
+
+### ⏳ Sprint E — Git flow production-ready (4 items)
+
+> Objectif : HQ utilisable sur un vrai repo avec un vrai remote.
+
+- **12. Link branche ↔ task** — `submit_for_review` exige que la branche soit
+  `agent/<name>/task-<id>` et qu'elle contienne des commits. Refuse sinon.
+- **13. Push avec auth** — tester SSH keys dans le sandbox (bind ~/.ssh RO),
+  gérer HTTPS + token via netrc ou credential helper.
+- **14. PR/MR auto sur `approved`** — créer une MR GitLab / PR GitHub via
+  `gh` ou `glab` quand l'humain clique Push ; ouvre l'URL en retour.
+- **16. Gestion conflits** — si la branche de l'agent ne fast-forward pas,
+  tenter rebase auto ; sinon transition `blocked` avec `blocked_reason`.
+
+### ⏳ Sprint F — Autonomy robustness (6 items)
+
+> Objectif : l'orchestration tient sur la durée sans intervention.
+
+- **6. Auto-resume après auto-pause budget** — au reset du quota
+  hebdomadaire, le daemon reprend les ticks au lieu de rester pausé.
+- **7. Hot reload SOUL.md / agent.toml** — valider en conditions réelles
+  que les modifs sont bien prises au prochain heartbeat.
+- **19. Heartbeat reaper observé** — chaos-test : simuler un crash de
+  claude, vérifier que le reaper timeout + unclaim + retry fonctionnent.
+- **42. Load balancing** — éviter qu'un worker prenne toutes les tasks ;
+  distribuer selon `tokens_today` et `current_task_id`.
+- **43. Agent capabilities check** — marquer les tasks avec les tools
+  requis, skip les agents qui n'ont pas ces tools.
+- **44. Dépendances de tasks** — enforcer `task_dependencies`, bloquer
+  tant que les deps ne sont pas `done`, auto-unblock au reverse.
+
+### ⏳ Sprint G — Human UX complete (7 items)
+
+> Objectif : l'UI couvre tous les workflows humain, plus de CLI obligatoire.
+
+- **22. Édition de goals dans l'UI** — page `/goals` CRUD.
+- **26. Pause/resume par agent** — bouton dans la card agent.
+- **27. Archived agents filter** — toggle "show archived" sur `/agents`.
+- **28. Vue multi-projets** (`/board/all`) — grille de projets en ligne.
+- **29. Settings page** — vue read-only du `project.toml` compilé,
+  éditeur pour les seuils simples (interval, timeout, budget).
+- **31. Loading skeletons** au lieu de `"loading…"` text.
+- **40. Browser Notification API** — ask permission une fois, push une
+  notif système pour les events critiques (review, blocked).
+
+### ⏳ Sprint H — Observability (6 items)
+
+> Objectif : quand un agent déconne, on sait pourquoi en 10 secondes.
+
+- **30. Dashboard metrics** — throughput tasks/jour, tokens/semaine par
+  projet, velocity par agent.
+- **34. Logs viewer UI** — tail live d'un heartbeat log, filtres.
+- **35. Daemon health endpoint** — `/api/health` + widget "daemon: ok
+  — dernier tick il y a 23s" en sidebar.
+- **36. Métriques agents** — temps idle/working par jour, tokens utilisés,
+  tasks shippées (graphiques simples dans la page Agents).
+- **37. Structured logging** — remplacer `console.log` par un logger
+  avec levels (debug/info/warn/error) et un output JSON optionnel pour
+  l'ingestion externe.
+- **38. Replay d'un heartbeat** — cliquer sur une ligne `heartbeats`
+  ouvre un drawer avec le log, les tools appelés, les events émis.
+
+### ⏳ Sprint I — Safety hardening (4 items)
+
+> Objectif : défense en profondeur sur le sandbox.
+
+- **46. Bash gate à l'intérieur du sandbox** — aujourd'hui le hook s'exécute
+  côté host ; si un agent casse bwrap, le hook tombe avec. Embarquer
+  `hq bash-gate` dans le bind read-only et le lancer depuis dedans.
+- **47. `~/.claude/.credentials.json` en read-only** — créer un symlink
+  vers une copie dans un dir bind séparé, pour qu'un agent ne puisse
+  pas overwrite les credentials de l'humain.
+- **48. Audit des commandes Bash** — chaque commande Bash acceptée par
+  bash-gate est loggée dans `activity` avec l'agent + commande tronquée.
+- **49. Mode "full readonly"** — flag `readonly_strict=true` dans
+  agent.toml qui force même les `Write`/`Edit` à passer par rules-gate
+  avec un refus global.
+
+### ⏳ Sprint J — Ops & packaging (5 items)
+
+> Objectif : déployable, upgradable, sauvegardable.
+
+- **45. Stop propre d'un agent** — `hq agent stop <name>` : kill tmux,
+  mark idle, annule les retries en cours.
+- **50. systemd service end-to-end** — `hq daemon install-service`,
+  `systemctl --user enable --now hq`, vérifier que ça tourne au reboot.
+- **51. Packaging binaire** — `bun build --compile packages/cli/src/bin.ts`,
+  publier un binaire par release pour distribution sans node_modules.
+- **52. Backup auto** — script cron user qui zip `~/.hq/registry.sqlite`
+  + chaque `<project>/.hq/db.sqlite` une fois par jour.
+- **53. Migration path** — versioning du schema via une table `meta`,
+  migrations générées par drizzle-kit dans `@hq/core/src/db/migrations/`.
+
+### ⏳ Sprint K — Tests, perf, polish final (5 items)
+
+> Objectif : passer les 39 tests unitaires à une vraie suite + perf.
+
+- **41. Digest quotidien** — résumé du jour envoyé par Discord à
+  21h : N tasks shippées, N bloquées, top 3 agents actifs.
+- **59. DESIGN.md public avec captures** — screenshots du kanban, du
+  drawer, de l'inbox ; publier sur le repo public.
+- **63. Integration test** — spawn un projet dummy dans `/tmp`, lancer
+  un agent fake en process séparé qui appelle le MCP, vérifier la DB
+  à chaque étape. Tourne dans la CI.
+- **64. DB pooling UI** — cacher les `Database` handles par projet
+  plutôt que d'en ouvrir un par requête HTTP.
+- **65. SSE fanout optimization** — remplacer le single `EventEmitter`
+  par un pub/sub plus scalable si on dépasse ~10 clients SSE simultanés
+  (probable jamais atteint pour usage solo, mais prêt pour le cas).
+
+---
+
+## Totaux
+
+- Items faits : 31
+- Items restants : 34
+- Sprints restants : 7 (E à K)
+- Estimation : ~2-3h chacun, soit ~15-21h pour boucler la v1
+
