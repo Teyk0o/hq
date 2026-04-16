@@ -2,11 +2,23 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   agentState,
+  createLogger,
   loadAgentConfig,
   loadProjectConfig,
   openProjectDb,
   type HQDatabase,
 } from '@hq/core';
+
+const log = createLogger('scheduler');
+
+/**
+ * Module-level map of "last scheduler tick timestamp per project". Exposed via
+ * lastTickAtMap() so the UI health endpoint can report daemon liveness.
+ */
+const lastTickAt = new Map<string, number>();
+export function lastTickAtMap(): ReadonlyMap<string, number> {
+  return lastTickAt;
+}
 import { Cron } from 'croner';
 import { and, eq, ne } from 'drizzle-orm';
 import { reapStaleHeartbeats, triggerHeartbeat } from './runner';
@@ -51,7 +63,7 @@ export class Scheduler {
 
     const tick = new Cron(pattern, { paused: false }, async () => {
       if (isQuotaPaused?.()) {
-        console.log(`[scheduler] ${project.name}: tick skipped (quota paused)`);
+        log.info('tick skipped', { project: project.name, reason: 'quota_paused' });
         return;
       }
       const t0 = Date.now();
@@ -62,14 +74,21 @@ export class Scheduler {
         stagger,
       );
       const elapsed = Date.now() - t0;
-      console.log(
-        `[scheduler] ${project.name}: tick fired ${fired.length} agent(s) in ${elapsed}ms${fired.length ? ' (' + fired.join(', ') + ')' : ''}`,
-      );
+      log.info('tick fired', {
+        project: project.name,
+        count: fired.length,
+        agents: fired,
+        ms: elapsed,
+      });
+      lastTickAt.set(project.name, Date.now());
     });
     this.timers.push(tick);
-    console.log(
-      `[scheduler] ${project.name}: every ${intervalMin}min (stagger ${stagger}s, max_concurrent ${cfg.scheduler.max_concurrent_agents})`,
-    );
+    log.info('project scheduled', {
+      project: project.name,
+      interval_min: intervalMin,
+      stagger_s: stagger,
+      max_concurrent: cfg.scheduler.max_concurrent_agents,
+    });
 
     // Separate reaper tick (every minute) for stale heartbeats.
     const reaper = new Cron('* * * * *', { paused: false }, async () => {
@@ -127,10 +146,11 @@ export class Scheduler {
         fired.push(candidate.name);
         slots -= 1;
       } catch (err) {
-        console.error(
-          `[scheduler] ${project.name}/${candidate.name} heartbeat failed:`,
-          err,
-        );
+        log.error('heartbeat trigger failed', {
+          project: project.name,
+          agent: candidate.name,
+          error: (err as Error).message,
+        });
       }
     }
     return fired;

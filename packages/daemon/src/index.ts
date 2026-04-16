@@ -8,7 +8,7 @@ export { reapOrphanedTmuxSessions } from './reaper';
 export { installEventTriggers } from './triggers';
 export { installDiscordWebhook, installProjectWebhooks } from './webhooks';
 export { buildHeartbeatPrompt } from './heartbeat';
-export { Scheduler, type ProjectEntry, type SchedulerOptions } from './scheduler';
+export { Scheduler, lastTickAtMap, type ProjectEntry, type SchedulerOptions } from './scheduler';
 export { QuotaPoller, type QuotaListener } from './quota';
 
 export const PACKAGE_NAME = '@hq/daemon';
