@@ -5,7 +5,9 @@ import {
   agentAttach,
   agentList,
   agentNew,
+  agentPause,
   agentRestore,
+  agentResume,
   agentRun,
   agentStop,
 } from './commands/agent';
@@ -58,6 +60,14 @@ agent
 agent.command('list').description('List agents and their status').action(agentList);
 agent.command('archive <name>').description('Soft-delete an agent').action(agentArchive);
 agent.command('restore <name>').description('Restore an archived agent').action(agentRestore);
+agent
+  .command('pause <name>')
+  .description('Pause an agent — the scheduler will skip it until resumed')
+  .action(agentPause);
+agent
+  .command('resume <name>')
+  .description('Resume a paused (or blocked / quota-paused) agent')
+  .action(agentResume);
 agent
   .command('run <name>')
   .description('Trigger a heartbeat immediately (manual)')

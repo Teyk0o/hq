@@ -116,6 +116,67 @@ export async function agentRestore(name: string): Promise<void> {
 }
 
 /**
+ * Pause an agent. Mirrors the UI endpoint in packages/ui/src/server.tsx:
+ * accepts any state except `archived` and flips to `paused`. The scheduler
+ * skips paused agents on every tick until resumed. If the agent is currently
+ * `working`, the MCP's end_heartbeat will land on `paused` instead of `idle`
+ * (runner.ts respects the existing status).
+ */
+export async function agentPause(name: string): Promise<void> {
+  const projectPath = resolveProjectPath();
+  const db = new Database(join(projectPath, '.hq', 'db.sqlite'));
+  const row = db
+    .prepare('SELECT status FROM agent_state WHERE name = ?')
+    .get(name) as { status: string } | undefined;
+  if (!row) {
+    console.error(`Agent "${name}" not found.`);
+    db.close();
+    process.exit(1);
+  }
+  if (row.status === 'archived') {
+    console.error(`Cannot pause "${name}": agent is archived. Use \`hq agent restore\` first.`);
+    db.close();
+    process.exit(1);
+  }
+  if (row.status === 'paused') {
+    console.log(`Agent "${name}" is already paused.`);
+    db.close();
+    return;
+  }
+  db.prepare(`UPDATE agent_state SET status = 'paused' WHERE name = ?`).run(name);
+  db.close();
+  console.log(`✓ Agent "${name}" paused. The scheduler will skip it until resumed.`);
+}
+
+/**
+ * Resume a paused agent. Allowed from `paused`, `paused_quota`, or `blocked`
+ * (the UI endpoint supports the same transitions). Clears `blocked_reason`
+ * on the way so a previously blocked agent doesn't get re-flagged stale.
+ */
+export async function agentResume(name: string): Promise<void> {
+  const projectPath = resolveProjectPath();
+  const db = new Database(join(projectPath, '.hq', 'db.sqlite'));
+  const row = db
+    .prepare('SELECT status FROM agent_state WHERE name = ?')
+    .get(name) as { status: string } | undefined;
+  if (!row) {
+    console.error(`Agent "${name}" not found.`);
+    db.close();
+    process.exit(1);
+  }
+  if (row.status !== 'paused' && row.status !== 'paused_quota' && row.status !== 'blocked') {
+    console.error(`Cannot resume "${name}": current status is "${row.status}", not paused.`);
+    db.close();
+    process.exit(1);
+  }
+  db.prepare(`UPDATE agent_state SET status = 'idle', blocked_reason = NULL WHERE name = ?`).run(
+    name,
+  );
+  db.close();
+  console.log(`✓ Agent "${name}" resumed → idle.`);
+}
+
+/**
  * Forcefully stop an agent: kill its tmux session, unclaim its in-progress
  * task, mark it idle. Useful when an agent is stuck and you want to restart
  * cleanly without waiting for the reaper. Respects the pause contract: if the
