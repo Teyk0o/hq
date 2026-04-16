@@ -32,4 +32,5 @@ export function openProjectDb(path: string): HQDatabase {
 
 const ADDITIVE_ALTERS = [
   `ALTER TABLE heartbeats ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE tasks ADD COLUMN pr_url TEXT`,
 ];

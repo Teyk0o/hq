@@ -39,6 +39,8 @@ export const tasks = sqliteTable(
     package: text('package'),
     branch: text('branch'),
     pushed: integer('pushed', { mode: 'boolean' }).notNull().default(false),
+    /** URL to the PR/MR automatically opened on push. */
+    prUrl: text('pr_url'),
     blockedReason: text('blocked_reason'),
     createdAt: integer('created_at').notNull().default(now),
     updatedAt: integer('updated_at').notNull().default(now),

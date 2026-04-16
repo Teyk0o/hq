@@ -25,11 +25,11 @@
 
 ### Git & code flow
 
-- [ ] **12. Link branche ↔ task** — MCP `submit_for_review` devrait forcer que la branche soit bien `agent/<name>/task-<id>` et que la task ait des commits.
-- [ ] **13. Push avec auth** — aujourd'hui `git push` naïf ; SSH keys du sandbox sont lisibles mais pas testés sous bwrap.
-- [ ] **14. PR/MR auto sur `approved`** — ou au moins bouton qui ouvre l'URL GitLab/GitHub.
+- [x] **12. Link branche ↔ task** — MCP `submit_for_review` devrait forcer que la branche soit bien `agent/<name>/task-<id>` et que la task ait des commits. *(claim_task stamp la branche attendue, submitForReview vérifie le git state réel et refuse avec des McpError typées)*
+- [x] **13. Push avec auth** — aujourd'hui `git push` naïf ; SSH keys du sandbox sont lisibles mais pas testés sous bwrap. *(bwrap ro-bind ~/.ssh, ~/.gitconfig, ~/.netrc, ~/.config/git ; push UI surface stderr comme 422 JSON error)*
+- [x] **14. PR/MR auto sur `approved`** — ou au moins bouton qui ouvre l'URL GitLab/GitHub. *(détection host github/gitlab via remote, invoke gh pr create / glab mr create, URL stockée dans tasks.pr_url, lien Open PR dans le drawer)*
 - [x] **15. Diff / git log dans le drawer** — tu ne peux pas voir le code produit sans `cd worktrees/agent && git log`.
-- [ ] **16. Gestion conflits** — quand `main` a avancé pendant qu'un agent bossait, que fait-on ?
+- [x] **16. Gestion conflits** — quand `main` a avancé pendant qu'un agent bossait, que fait-on ? *(sur Push: git fetch + git rebase origin/default_branch ; conflit → rebase --abort + task blocked avec reason, humain/agent reprend en main)*
 
 ### Stabilité
 
@@ -141,7 +141,7 @@ utilisateur, tests unitaires, CI GitHub Actions.
 
 ---
 
-### ⏳ Sprint E — Git flow production-ready (4 items)
+### ✅ Sprint E — Git flow production-ready (4 items)
 
 > Objectif : HQ utilisable sur un vrai repo avec un vrai remote.
 

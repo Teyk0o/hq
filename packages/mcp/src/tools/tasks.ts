@@ -8,6 +8,8 @@ import {
   type TaskState,
 } from '@hq/core';
 import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { join } from 'node:path';
+import { branchExists, commitsAhead, currentBranch } from '../git';
 import { McpError, requireCapability, type McpContext } from '../context';
 
 export interface ListTasksInput {
@@ -89,11 +91,16 @@ export async function claimTask(ctx: McpContext, input: { id: string }) {
   }
 
   const now = Date.now();
+  // Stamp the expected branch name on the task at claim time. submitForReview
+  // will verify the actual git state matches this. branch_prefix is already
+  // normalised (defaults to "agent/").
+  const expectedBranch = `${ctx.projectConfig.git.branch_prefix}${ctx.agentName}/task-${input.id}`;
   const claimed = ctx.db.transaction((tx) => {
     tx.update(tasksTable)
       .set({
         status: 'in_progress',
         assignee: ctx.agentName,
+        branch: expectedBranch,
         claimedAt: now,
         updatedAt: now,
       })
@@ -146,29 +153,65 @@ export async function submitForReview(
   input: { id: string; summary?: string },
 ) {
   const task = ctx.db.select().from(tasksTable).where(eq(tasksTable.id, input.id)).get();
-  if (!task) throw new Error(`Task not found: ${input.id}`);
+  if (!task) throw new McpError('task_not_found', `Task not found: ${input.id}`);
   if (task.assignee !== ctx.agentName) {
-    throw new Error(`Only the assignee (${task.assignee}) can submit this task`);
+    throw new McpError(
+      'not_assignee',
+      `Only the assignee (${task.assignee}) can submit this task`,
+    );
   }
   const transition = canActorTransition(
     { kind: 'agent', name: ctx.agentName, capabilities: ctx.capabilities },
     task.status,
     'peer_review',
   );
-  if (!transition.ok) throw new Error(transition.reason);
+  if (!transition.ok) throw new McpError('invalid_transition', transition.reason);
 
-  ctx.db
-    .update(tasksTable)
-    .set({ status: 'peer_review', updatedAt: Date.now() })
-    .where(eq(tasksTable.id, input.id))
-    .run();
-
-  if (input.summary) {
-    ctx.db
-      .insert(commentsTable)
-      .values({ id: newId(), taskId: input.id, author: ctx.agentName, body: input.summary })
-      .run();
+  // Enforce the branch↔task contract before letting the task move forward.
+  // The expected branch was stamped at claim time; verify git state matches.
+  const worktree = join(
+    ctx.projectPath,
+    ctx.projectConfig.git.worktree_dir,
+    ctx.agentName,
+  );
+  const expectedBranch =
+    task.branch ??
+    `${ctx.projectConfig.git.branch_prefix}${ctx.agentName}/task-${input.id}`;
+  const active = currentBranch(worktree);
+  if (active !== expectedBranch) {
+    throw new McpError(
+      'branch_mismatch',
+      `Expected to be on branch "${expectedBranch}" but the worktree is on "${active ?? '(detached)'}"`,
+      { expected: expectedBranch, actual: active },
+    );
   }
+  if (!branchExists(worktree, expectedBranch)) {
+    throw new McpError(
+      'branch_missing',
+      `Branch "${expectedBranch}" does not exist in the worktree`,
+    );
+  }
+  const defaultBranch = ctx.projectConfig.project.default_branch;
+  const ahead = commitsAhead(worktree, expectedBranch, defaultBranch);
+  if (ahead < 1) {
+    throw new McpError(
+      'no_commits',
+      `Branch "${expectedBranch}" has no commits ahead of "${defaultBranch}". Commit your changes before submitting.`,
+      { branch: expectedBranch, base: defaultBranch },
+    );
+  }
+
+  ctx.db.transaction((tx) => {
+    tx.update(tasksTable)
+      .set({ status: 'peer_review', branch: expectedBranch, updatedAt: Date.now() })
+      .where(eq(tasksTable.id, input.id))
+      .run();
+    if (input.summary) {
+      tx.insert(commentsTable)
+        .values({ id: newId(), taskId: input.id, author: ctx.agentName, body: input.summary })
+        .run();
+    }
+  });
 
   ctx.bus.publish({
     type: 'task.status_changed',

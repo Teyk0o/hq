@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { AgentConfigSchema, newId, type HQEvent } from '@hq/core';
+import { AgentConfigSchema, loadProjectConfig, newId, type HQEvent } from '@hq/core';
 import { getSharedBus } from '@hq/mcp';
 import { parse as parseToml } from 'smol-toml';
 import {
@@ -25,6 +25,7 @@ import {
   type KanbanTask,
 } from './views';
 import { Layout } from './layout';
+import { openPullRequest } from './pr-helper';
 
 export interface UiServerOptions {
   host?: string;
@@ -568,6 +569,13 @@ export function createApp(options: UiServerOptions): Hono {
     return c.body(null, 204);
   });
 
+  /**
+   * Push the agent's branch to origin under the human's git identity. We
+   * deliberately run git push from the daemon process (not from inside the
+   * agent's bwrap sandbox) so the user's SSH keys and ~/.netrc are used
+   * directly without having to thread them through. Error stderr is
+   * surfaced so the UI can toast a real message on auth / conflict failures.
+   */
   app.post('/api/tasks/:id/push', async (c) => {
     const id = c.req.param('id');
     const project = currentProject(c.req.raw);
@@ -581,15 +589,68 @@ export function createApp(options: UiServerOptions): Hono {
       db.close();
       return c.json({ error: 'task not pushable' }, 400);
     }
-    const proc = Bun.spawn(['git', 'push', '-u', 'origin', task.branch], {
+
+    // Before pushing, fetch origin and try to rebase the agent's branch onto
+    // the project's default branch. If the rebase conflicts, we leave the
+    // branch as-is, flip the task to blocked with a reason, and bail out —
+    // the human (or the author agent) must resolve the conflict manually.
+    const cfgForPush = await loadProjectConfig(join(projectPath, '.hq', 'project.toml'));
+    const defaultBranch = cfgForPush.project.default_branch;
+
+    const fetch = Bun.spawnSync(['git', 'fetch', 'origin', defaultBranch], {
       cwd: projectPath,
-      stdout: 'pipe',
-      stderr: 'pipe',
     });
-    await proc.exited;
+    if (fetch.exitCode !== 0) {
+      console.warn(`[push] fetch failed for ${id}: ${fetch.stderr.toString().trim()}`);
+      // Not fatal — we can still try to push. If origin is unreachable the
+      // subsequent push will fail with a clean error.
+    }
+
+    const rebase = Bun.spawnSync(
+      ['git', 'rebase', `origin/${defaultBranch}`, task.branch],
+      { cwd: projectPath },
+    );
+    if (rebase.exitCode !== 0) {
+      // Abort the half-done rebase so we don't leave the working copy dirty.
+      Bun.spawnSync(['git', 'rebase', '--abort'], { cwd: projectPath });
+      const reason = `merge conflict against ${defaultBranch}: ${rebase.stderr.toString().trim().slice(0, 400)}`;
+      db.prepare(
+        `UPDATE tasks SET status = 'blocked', blocked_reason = ?, updated_at = ? WHERE id = ?`,
+      ).run(reason, Date.now(), id);
+      db.close();
+      bus.publish({ type: 'task.blocked', task_id: id, reason });
+      bus.publish({
+        type: 'task.status_changed',
+        task_id: id,
+        from: 'approved',
+        to: 'blocked',
+        by: 'human',
+      });
+      return c.json({ error: reason }, 409);
+    }
+
+    const push = Bun.spawnSync(['git', 'push', '-u', '--force-with-lease', 'origin', task.branch], {
+      cwd: projectPath,
+    });
+    if (push.exitCode !== 0) {
+      db.close();
+      const stderr = push.stderr.toString().trim() || 'git push failed';
+      return c.json({ error: stderr }, 422);
+    }
+
+    // Fetch the task title so we can use it as the PR title.
+    const full = db.prepare('SELECT title FROM tasks WHERE id = ?').get(id) as
+      | { title: string }
+      | undefined;
+    const pr = await openPullRequest(projectPath, task.branch, full?.title ?? `Task ${id}`);
+    if (pr.error) {
+      console.warn(`[push] PR creation skipped for ${id}: ${pr.error}`);
+    }
+
     db.prepare(
-      `UPDATE tasks SET status = 'done', pushed = 1, completed_at = ?, updated_at = ? WHERE id = ?`,
-    ).run(Date.now(), Date.now(), id);
+      `UPDATE tasks SET status = 'done', pushed = 1, pr_url = COALESCE(?, pr_url),
+         completed_at = ?, updated_at = ? WHERE id = ?`,
+    ).run(pr.url ?? null, Date.now(), Date.now(), id);
     db.close();
     bus.publish({ type: 'task.pushed', task_id: id, branch: task.branch });
     bus.publish({
