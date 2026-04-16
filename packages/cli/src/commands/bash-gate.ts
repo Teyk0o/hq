@@ -1,12 +1,18 @@
 import { join } from 'node:path';
-import { loadProjectConfig } from '@hq/core';
+import { loadProjectConfig, openProjectDb, activity as activityTable } from '@hq/core';
 
 /**
  * Claude Code PreToolUse hook: reads the tool call payload from stdin and
  * decides whether the Bash invocation is allowed by the project whitelist.
  *
- * Exit code 0 = allow, exit code 2 = block (stderr becomes feedback shown to Claude).
- * Any other failure mode also exits 2 with an error message.
+ * This runs as a subprocess of Claude, which itself runs inside the
+ * bubblewrap sandbox — so the hook inherits the sandbox's namespaces and
+ * file-system constraints. It's protected by the same isolation layer as
+ * the agent it gates; an agent that somehow crashed the hook would still
+ * be confined to its worktree + read-only host FS.
+ *
+ * Exit 0 = allow (and an audit row gets written to activity), exit 2 =
+ * block with stderr shown to Claude.
  */
 export async function bashGateCommand(opts: { project: string; agent: string }): Promise<void> {
   const stdin = await readStdin();
@@ -22,6 +28,7 @@ export async function bashGateCommand(opts: { project: string; agent: string }):
 
   for (const pattern of cfg.bash.deny_patterns) {
     if (new RegExp(pattern).test(command)) {
+      logAudit(opts.project, opts.agent, command, 'denied', `pattern:${pattern}`);
       process.stderr.write(`HQ bash-gate: denied by pattern /${pattern}/\n  command: ${command}\n`);
       process.exit(2);
     }
@@ -29,6 +36,7 @@ export async function bashGateCommand(opts: { project: string; agent: string }):
 
   const allowed = cfg.bash.allow_prefixes.some((prefix) => command.startsWith(prefix));
   if (!allowed) {
+    logAudit(opts.project, opts.agent, command, 'denied', 'not_whitelisted');
     process.stderr.write(
       `HQ bash-gate: command not in allow_prefixes\n  command: ${command}\n` +
         `  add the prefix to project.toml [bash] allow_prefixes if legitimate.\n`,
@@ -36,7 +44,38 @@ export async function bashGateCommand(opts: { project: string; agent: string }):
     process.exit(2);
   }
 
+  logAudit(opts.project, opts.agent, command, 'allowed');
   process.exit(0);
+}
+
+/**
+ * Write a one-line audit row for every bash invocation the gate evaluates.
+ * Allowed commands let us reconstruct what an agent actually ran; denials
+ * are useful to catch policies that are too tight or a rogue agent probing
+ * the surface. Best-effort: a broken DB must never break the gate itself.
+ */
+function logAudit(
+  projectPath: string,
+  agent: string,
+  command: string,
+  outcome: 'allowed' | 'denied',
+  reason?: string,
+): void {
+  try {
+    const db = openProjectDb(join(projectPath, '.hq', 'db.sqlite'));
+    db.insert(activityTable)
+      .values({
+        agent,
+        action: outcome === 'denied' ? 'bash.denied' : 'bash.allowed',
+        details: JSON.stringify({
+          command: command.length > 400 ? `${command.slice(0, 400)}…` : command,
+          ...(reason ? { reason } : {}),
+        }),
+      })
+      .run();
+  } catch {
+    // never fail the gate on a logging glitch
+  }
 }
 
 async function readStdin(): Promise<string> {
