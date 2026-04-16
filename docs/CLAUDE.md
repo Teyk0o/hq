@@ -87,6 +87,22 @@ hq agent new bob   --role reviewer --gender male
 hq agent new morgane --role boss --gender female
 ```
 
+**The 4 roles are capability buckets, not job titles.** You model a
+"backend engineer" or a "frontend engineer" or a "DevOps" by:
+
+1. Picking the right base `role` (almost always `worker` if they ship
+   code, `reviewer` if they only review, `boss` if they only plan,
+   `readonly` if they only observe).
+2. Setting `scope.packages` in `agent.toml` to the folders they own.
+3. Writing a `SOUL.md` that spells out their stack, conventions, and
+   review style.
+4. Adding `[[rules]] owner = "<name>"` in `project.toml` so the
+   rules-gate hard-blocks cross-team writes.
+
+Two "workers" with different scopes + SOULs are effectively two
+different specialties. See [full team template](#reference-team--9-agent-saas-startup)
+at the end of this doc.
+
 Each command creates `.hq/agents/<name>.toml` and `.hq/agents/<name>.md`
 (the SOUL). **Write a real SOUL** for each agent — the generated
 placeholder is not enough. See the templates in
@@ -304,6 +320,135 @@ list. Good prompts for the user:
 
 Bad response: dumping the CLI list or pasting `GUIDE.md`. The user wants
 to know how HQ applies to *their* repo.
+
+---
+
+## Reference team — 9-agent SaaS startup
+
+Use this as a skeleton when the user asks for a "full team". Rename
+agents and remap `scope.packages` to the folders that actually exist
+in the repo.
+
+Fictional product **Atlas** — a B2B collaboration app (Linear/Notion
+flavour). Repo layout:
+
+```
+apps/{web,mobile,marketing}/    packages/{api,db,ui}/
+design/                         infra/
+```
+
+### Org chart
+
+```
+                     nora  (boss — CTO + PM)
+                     plans goals, routes tasks
+                              │
+   ┌───────┬───────┬───────┬──┴──┬───────┬────────┐
+   │       │       │       │     │       │        │
+  alex   sofia   kenji   mira   iris    zoe
+ worker  worker  worker  worker worker  worker
+ backend web     mobile  infra  designer marketing
+ (api,   (web,   (mobile)       (design, (marketing)
+  db)    ui)                     ui)
+   │       │       │       │     │       │
+   └───────┴───────┴───┬───┴─────┴───────┘
+                       │
+               ┌───────┴────────┐
+               │                │
+             sandor          thomas
+            reviewer         readonly
+           (devil's          (QA)
+           advocate)
+```
+
+### Who does what
+
+| Agent | Role | Scope | Specialty |
+|---|---|---|---|
+| `nora` | boss | — | CTO+PM, plans goals → tasks, routes via `send_message`. Opus. |
+| `alex` | worker | `api`, `db` | Senior backend (REST, schema, migrations). |
+| `sofia` | worker | `web`, `ui` | Senior frontend web (Next.js, design-system impl). |
+| `kenji` | worker | `mobile` | Mobile (React Native, iOS + Android). |
+| `mira` | worker | `infra` | Platform / DevOps (terraform, CI, observability). |
+| `iris` | worker | `design`, `ui`, `marketing` | Product designer (tokens, assets, copy decks). |
+| `zoe` | worker | `marketing` | Marketing / content (landing, pricing, blog, SEO). |
+| `sandor` | reviewer | — | Devil's advocate reviewer. |
+| `thomas` | readonly | — | QA auditor, comments only. |
+
+Note: `iris` and `sofia` **both** have `ui` in their scope. Iris edits
+tokens and assets; sofia implements the React components. There's no
+`owner` rule on `packages/ui/` — ownership is cooperative. The SOULs
+spell out the hand-off ("@mention the other before crossing over").
+
+### Minimum `project.toml` contract
+
+```toml
+[[rules]]
+match = "packages/{api,db}/**"
+owner = "alex"
+
+[[rules]]
+match = "apps/web/**"
+owner = "sofia"
+
+[[rules]]
+match = "apps/mobile/**"
+owner = "kenji"
+
+[[rules]]
+match = "infra/**"
+owner = "mira"
+
+[[rules]]
+match = "apps/marketing/**"
+owner = "zoe"
+
+[[rules]]
+match = "design/**"
+owner = "iris"
+
+# packages/ui has NO owner rule — shared between sofia and iris.
+
+[[rules]]
+match = ".github/**"
+owner = "mira"
+
+[[rules]]
+protected_paths = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock"]
+
+[[rules]]
+match = "**/.env*"
+action = "block"
+```
+
+### Key insight: role ≠ specialty
+
+`iris` (designer) and `zoe` (marketing) have the same `role = "worker"`
+as the engineers. Their specialty lives in their SOUL + their
+`scope.packages`. To create a **security reviewer**, you'd make a new
+`role = "reviewer"` agent whose SOUL focuses on authn/crypto audits.
+To create an **SRE**, another `role = "worker"` with
+`scope.packages = ["infra"]`. No new role type required.
+
+### Scaling rules
+
+- **Solo / week 1**: 1 worker + 1 reviewer. No boss, no marketing, no
+  design. Goals optional.
+- **Small team**: `nora` + 2 workers covering the user's primary
+  packages + `sandor`. Skip design + marketing until there's a design
+  system or a marketing surface to own.
+- **Full team**: all 9 as above.
+- **Heavier**: add specialists — `security-priya` (reviewer), `sre-takeshi`
+  (worker, `scope=["infra"]`), `data-mei` (worker, `scope=["analytics"]`), etc.
+
+When the user asks "who should I hire?", do **not** propose this team
+verbatim. Map their actual repo folders to scopes first, then suggest
+agents with matching scopes and realistic names. Propose the smallest
+team that covers their folders.
+
+Full config examples (TOMLs + SOULs for every agent) are in
+[`GUIDE.md`](./GUIDE.md#example-team--9-agent-saas-startup). When
+setting up, copy from there and adjust names + scopes.
 
 ---
 

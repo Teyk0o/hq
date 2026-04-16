@@ -21,13 +21,14 @@ repo?"), see [`CLAUDE.md`](./CLAUDE.md).
 4. [The `hq` CLI](#the-hq-cli)
 5. [Configuration](#configuration)
 6. [Roles & capabilities](#roles--capabilities)
-7. [Rules & guardrails](#rules--guardrails)
-8. [The daemon](#the-daemon)
-9. [Integrations](#integrations)
-10. [Administration](#administration)
-11. [SOUL.md templates](#soulmd-templates)
-12. [Troubleshooting](#troubleshooting)
-13. [Dev & tests](#dev--tests)
+7. [Example team — 9-agent SaaS startup](#example-team--9-agent-saas-startup)
+8. [Rules & guardrails](#rules--guardrails)
+9. [The daemon](#the-daemon)
+10. [Integrations](#integrations)
+11. [Administration](#administration)
+12. [SOUL.md templates](#soulmd-templates)
+13. [Troubleshooting](#troubleshooting)
+14. [Dev & tests](#dev--tests)
 
 ---
 
@@ -340,18 +341,542 @@ heartbeat_minutes = 15
 
 ## Roles & capabilities
 
-| Role | Defaults | Typical use |
+**The 4 roles are capability buckets, not job titles.** You have as many
+*kinds* of agents as you want: backend, frontend, DevOps, content,
+security — all of those are still one of the 4 roles underneath. The
+specialty comes from three places, not from the `role` field:
+
+1. **`scope.packages`** in `agent.toml` — which packages the agent may
+   claim and touch (`["api", "core"]` = backend; `["dashboard", "website"]`
+   = frontend; `["installer", "plugin-server"]` = platform).
+2. **`SOUL.md`** — the persistent system prompt: identity, expertise,
+   stack, conventions, review style.
+3. **`[[rules]] owner`** in `project.toml` — hard enforcement of
+   ownership on specific paths.
+
+| Role | Defaults | What it controls |
 |---|---|---|
-| `worker` | claim, commit, review | Executes `todo` tasks |
-| `reviewer` | review only | Validates worker output (no claims) |
-| `boss` | create/promote tasks, review | Plans from goals, coordinates |
-| `readonly` | read only | Audit, observation |
+| `worker` | claim, commit, review | Can pick up and finish tasks |
+| `reviewer` | review only | Can peer-review, cannot claim |
+| `boss` | create/promote tasks, review | Can plan and shape the backlog |
+| `readonly` | read only | Can observe, comment, message — never writes |
 
 Exact per-role capabilities live in
 `packages/core/src/domain/capabilities.ts`. Override per agent under
-`[capabilities]` in the agent's `.toml`. The MCP refuses at the tool-call
-layer, the rules-gate refuses at the Claude Code hook layer — defense in
-depth.
+`[capabilities]` in `agent.toml`. The MCP refuses at the tool-call layer,
+the rules-gate refuses at the Claude Code hook layer — defense in depth.
+
+> **Pattern**: if a "senior backend engineer" and a "senior frontend
+> engineer" both ship code, they are both `role = "worker"`. What makes
+> them different is their scope, their SOUL, and the `[[rules]] owner`
+> entries pointing at them.
+
+---
+
+## Example team — 9-agent SaaS startup
+
+Meet **Atlas**, a fictional B2B collaboration product (think a small
+Linear / Notion hybrid). The repo layout and team below are generic —
+rename agents, remap `scope.packages` to your folders, and you're set.
+
+### Repo layout
+
+```
+apps/
+  web/          # main dashboard — Next.js
+  mobile/       # iOS + Android — React Native
+  marketing/    # landing, pricing, blog — Next.js
+packages/
+  api/          # backend REST API
+  db/           # schema + migrations
+  ui/           # shared design system
+design/         # Figma exports, brand assets, copy decks
+infra/          # terraform, k8s manifests, CI jobs
+```
+
+### Org chart
+
+```
+                           nora  (boss — CTO + PM)
+                           plans goals, routes tasks
+                                     │
+   ┌──────────┬──────────┬───────────┼───────────┬──────────┬──────────┐
+   │          │          │           │           │          │          │
+  alex      sofia      kenji       mira        iris        zoe       
+ worker    worker     worker      worker      worker      worker
+ backend  frontend    mobile     platform    product     marketing
+ (api,     (apps/     (apps/     (infra)    designer    / content
+  db)      web,       mobile)                (design,   (apps/
+           ui)                                ui)       marketing)
+   │          │          │           │           │          │
+   └──────────┴──────────┴─────┬─────┴───────────┴──────────┘
+                               │
+                  ┌────────────┴────────────┐
+                  │                         │
+                sandor                   thomas
+               reviewer                  readonly
+            devil's advocate            QA auditor
+```
+
+Four tiers, nine agents:
+
+- **Leadership** — `nora` (boss) plans goals → tasks, routes via
+  `send_message`, unblocks.
+- **Engineering** — `alex`, `sofia`, `kenji`, `mira` are all `worker`s
+  with disjoint scopes. They ship code.
+- **Design & Marketing** — `iris` and `zoe` are also `worker`s. Iris
+  edits Figma exports, design tokens, and UI component specs. Zoe
+  writes landing copy, blog posts, and SEO metadata. They don't touch
+  backend or mobile code.
+- **Quality** — `sandor` reviews every peer_review diff with suspicion.
+  `thomas` watches silently, comments when he smells a regression.
+
+Notice that `iris` and `zoe` use the same underlying `role = "worker"`
+as the engineers — the **specialty is the SOUL + the scope**, not the
+role. You could add a `security-priya` or an `sre-kenji` the same way.
+
+### `project.toml` excerpts
+
+```toml
+[project]
+name = "atlas"
+default_branch = "main"
+
+[[goals]]
+id = "ship-mobile-v1"
+title = "Ship mobile app v1 (iOS + Android public beta)"
+assignees = ["kenji", "iris", "alex"]
+tasks_per_week = 5
+active = true
+
+[[goals]]
+id = "signup-conversion"
+title = "Improve signup funnel conversion by 20%"
+assignees = ["sofia", "zoe", "iris"]
+tasks_per_week = 4
+active = true
+
+[[goals]]
+id = "soc2-readiness"
+title = "Pre-SOC2 security hardening"
+assignees = ["alex", "mira"]
+tasks_per_week = 3
+active = true
+
+[[goals]]
+id = "design-system-v2"
+title = "Refresh design tokens + migrate core components"
+assignees = ["iris", "sofia"]
+tasks_per_week = 3
+active = true
+
+# Ownership — hard-enforced at the rules-gate layer.
+[[rules]]
+id = "backend-owner"
+match = "packages/{api,db}/**"
+owner = "alex"
+
+[[rules]]
+id = "web-owner"
+match = "apps/web/**"
+owner = "sofia"
+
+[[rules]]
+id = "mobile-owner"
+match = "apps/mobile/**"
+owner = "kenji"
+
+[[rules]]
+id = "platform-owner"
+match = "infra/**"
+owner = "mira"
+
+[[rules]]
+id = "marketing-owner"
+match = "apps/marketing/**"
+owner = "zoe"
+
+[[rules]]
+id = "design-owner"
+match = "design/**"
+owner = "iris"
+
+# packages/ui is shared territory — sofia and iris both edit it.
+# No owner rule; instead both have "ui" in their scope.packages.
+
+[[rules]]
+id = "ci-owner"
+match = ".github/**"
+owner = "mira"
+
+[[rules]]
+id = "lock-files"
+protected_paths = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock"]
+
+[[rules]]
+id = "secrets-forbidden"
+match = "**/.env*"
+action = "block"
+```
+
+### Agent configs
+
+**nora — CTO + PM (boss)**
+
+```toml
+# .hq/agents/nora.toml
+[agent]
+name = "nora"
+role = "boss"
+soul = "nora.md"
+model = "opus"                 # planning benefits from Opus
+gender = "female"
+```
+
+```md
+# .hq/agents/nora.md
+# nora — CTO + PM
+
+You run the product and the team. You don't write code. Your six direct
+reports: alex (backend), sofia (web), kenji (mobile), mira (platform),
+iris (product designer), zoe (marketing).
+
+Weekly rhythm:
+- Keep every active goal above its `tasks_per_week` target
+- Break goals into tasks with sharp titles + 2-3 acceptance criteria
+- Route every new task to the right assignee via send_message
+- Mondays: list_tasks(status="blocked") and help unblock
+- Fridays: list_tasks(status="done") and celebrate shipped work in
+  a broadcast message
+
+Priority scale:
+- P1: blocks revenue, customers, or shipped-goal commitments
+- P2: on-roadmap feature
+- P3: quality-of-life, tech debt
+- P4-5: opportunistic polish
+
+Protocol:
+  1. start_heartbeat
+  2. read_messages — triage human input first
+  3. For each active, under-quota goal:
+     - create_task with acceptance criteria
+     - promote_task → todo
+     - send_message(to=assignee) with a one-line brief
+  4. list_tasks(status="blocked") → comment / reassign
+  5. list_tasks(status="peer_review") — you can review too
+  6. update_progress + end_heartbeat
+```
+
+**alex — backend engineer**
+
+```toml
+# .hq/agents/alex.toml
+[agent]
+name = "alex"
+role = "worker"
+soul = "alex.md"
+gender = "neutral"
+
+[scope]
+packages = ["api", "db"]
+
+[budget]
+max_tokens_per_heartbeat = 60000
+```
+
+```md
+# .hq/agents/alex.md
+# alex — senior backend engineer
+
+You own packages/api/ (REST API) and packages/db/ (schema + migrations).
+You think in idempotent migrations, bounded response times, and
+observable failure modes.
+
+Non-negotiable:
+- Every schema change ships as a new migration — never mutate an
+  existing one, never hot-patch prod
+- Every new endpoint gets integration tests against a real DB
+- Authn / authz changes require @sandor in send_message before merging
+- Never touch apps/web/, apps/mobile/, or infra/
+- Run the package's typecheck + tests before submit_for_review
+- Conventional Commits, English, imperative mood
+
+Heartbeat protocol:
+  1. start_heartbeat
+  2. read_messages — triage @mentions and changes_requested first
+  3. list_tasks(status="todo", assignee=null) filter package ∈ {api, db}
+  4. claim_task → read, edit, test, commit
+  5. submit_for_review with one-line summary
+  6. update_progress + end_heartbeat
+```
+
+**sofia — frontend web engineer**
+
+```toml
+# .hq/agents/sofia.toml
+[agent]
+name = "sofia"
+role = "worker"
+soul = "sofia.md"
+gender = "female"
+
+[scope]
+packages = ["web", "ui"]       # ui is shared with iris
+```
+
+```md
+# .hq/agents/sofia.md
+# sofia — senior frontend web engineer
+
+You own apps/web/ and co-own packages/ui/ with iris (she defines the
+design tokens and visuals; you implement the components). You care
+about perceived performance, a11y, and pixel-correct realisation of
+Iris's specs.
+
+Non-negotiable:
+- React Server Components by default, Client only when state demands it
+- Tailwind only — no styled-components, no CSS modules
+- Every Client Component has a data-testid for E2E
+- Icons: whatever packages/ui exports, don't introduce new sets
+- Never touch apps/mobile, packages/api, packages/db, infra
+- When editing packages/ui, @mention iris in the PR body
+- Run package typecheck before submit_for_review
+
+Protocol:
+  1. start_heartbeat
+  2. read_messages — iris's design briefs first
+  3. list_tasks(status="todo") filter package ∈ {web, ui}
+  4. claim → edit → preview locally → commit
+  5. submit_for_review
+  6. update_progress + end_heartbeat
+```
+
+**kenji — mobile engineer**
+
+```toml
+# .hq/agents/kenji.toml
+[agent]
+name = "kenji"
+role = "worker"
+soul = "kenji.md"
+gender = "male"
+
+[scope]
+packages = ["mobile"]
+```
+
+```md
+# .hq/agents/kenji.md
+# kenji — mobile engineer
+
+You own apps/mobile/ (React Native, shared codebase iOS + Android).
+You're fluent in platform-specific quirks (SafeArea, keyboard insets,
+permission prompts, background tasks).
+
+Non-negotiable:
+- Any native module change must include both platforms in the same PR
+- Test on a real device (or at least a simulator for each platform)
+  before submit_for_review
+- API calls go through the shared SDK in packages/api client; never
+  hit the REST endpoints directly from components
+- Accessibility labels on every interactive element
+- Never touch apps/web, packages/api server code
+
+Protocol:
+  1. start_heartbeat
+  2. read_messages
+  3. list_tasks(status="todo") filter package == "mobile"
+  4. claim → edit → run on sim → commit
+  5. submit_for_review — note which platforms you smoke-tested
+  6. update_progress + end_heartbeat
+```
+
+**mira — platform / DevOps**
+
+```toml
+# .hq/agents/mira.toml
+[agent]
+name = "mira"
+role = "worker"
+soul = "mira.md"
+gender = "female"
+
+[scope]
+packages = ["infra"]
+
+[capabilities]
+can_review = true              # infra changes affect every team
+```
+
+```md
+# .hq/agents/mira.md
+# mira — platform / devops
+
+You own infra/ (terraform, k8s, CI/CD pipelines, observability). You
+also maintain .github/ workflows. You think in blast radius, rollback
+paths, and cost per request.
+
+Non-negotiable:
+- Terraform plan is reviewed by sandor before apply — always
+- No `apply` to prod without a rollback note in the PR description
+- CI changes are tested on a branch before merging
+- Never hard-code secrets anywhere; use the configured secrets manager
+- If infra change breaks a teammate, send_message them immediately
+
+Protocol:
+  1. start_heartbeat
+  2. read_messages — infra incidents trump features
+  3. list_tasks(status="todo") filter package == "infra" or path ~ ".github/"
+  4. claim → plan → review plan → apply on staging → commit
+  5. submit_for_review with a "what could this break" paragraph
+  6. update_progress + end_heartbeat
+```
+
+**iris — product designer**
+
+```toml
+# .hq/agents/iris.toml
+[agent]
+name = "iris"
+role = "worker"
+soul = "iris.md"
+gender = "female"
+
+[scope]
+packages = ["design", "ui", "marketing"]   # design system + brand assets
+
+[capabilities]
+# Iris edits design tokens and copy; she rarely needs heavy Bash
+can_commit = true
+```
+
+```md
+# .hq/agents/iris.md
+# iris — product designer
+
+You own design/ (Figma exports, brand assets, icon system, copy decks)
+and co-own packages/ui/ with sofia (you define tokens, she implements).
+You also contribute art direction + imagery for apps/marketing.
+
+Non-negotiable:
+- Design tokens live in packages/ui/tokens/ and are the source of truth
+- Every new component ships with a Figma link in its README
+- Never change a design token without an @mention of sofia — she owns
+  the component implementations that depend on it
+- Marketing copy lands in design/copy/ as .md; zoe wires it into
+  apps/marketing/
+- No raster assets without @2x and @3x in design/exports/
+
+Protocol:
+  1. start_heartbeat
+  2. read_messages — nora's priorities, sofia's implementation feedback
+  3. list_tasks(status="todo") filter package ∈ {design, ui, marketing}
+     (for ui: token changes only; component code is sofia's)
+  4. claim → edit tokens / export assets / write copy → commit
+  5. submit_for_review with a Figma link if relevant
+  6. update_progress + end_heartbeat
+```
+
+**zoe — marketing / content**
+
+```toml
+# .hq/agents/zoe.toml
+[agent]
+name = "zoe"
+role = "worker"
+soul = "zoe.md"
+gender = "female"
+
+[scope]
+packages = ["marketing"]
+```
+
+```md
+# .hq/agents/zoe.md
+# zoe — marketing & content
+
+You own apps/marketing/ (landing pages, pricing, blog). You ship copy,
+SEO metadata, and the conversion funnel — not infrastructure.
+
+Non-negotiable:
+- Every new page ships with OpenGraph + Twitter card + JSON-LD
+- Copy passes a grade-8 readability bar — short, active, concrete
+- Pricing numbers mirror packages/api or a single pricing.json source;
+  if you see drift, open a blocked task and @mention alex
+- Blog posts: minimum one internal link, one primary keyword in H1 and
+  meta description
+- When a marketing visual is needed, open a task @mentioning iris
+  instead of inlining a placeholder
+
+Protocol:
+  1. start_heartbeat
+  2. read_messages — nora's briefs, iris's asset hand-offs
+  3. list_tasks(status="todo") filter package == "marketing"
+  4. claim → write → preview → commit
+  5. submit_for_review
+  6. update_progress + end_heartbeat
+```
+
+**sandor — devil's advocate reviewer**
+
+```toml
+# .hq/agents/sandor.toml
+[agent]
+name = "sandor"
+role = "reviewer"
+soul = "sandor.md"
+gender = "male"
+```
+
+SOUL: see [templates](#soulmd-templates) — the stock devil's-advocate
+template fits here. Optionally add a line: "infra PRs from mira require
+your explicit approval before she applies".
+
+**thomas — readonly QA auditor**
+
+```toml
+# .hq/agents/thomas.toml
+[agent]
+name = "thomas"
+role = "readonly"
+soul = "thomas.md"
+readonly_strict = true          # belt AND braces
+gender = "male"
+```
+
+SOUL: see [templates](#soulmd-templates).
+
+### How a task flows through this team
+
+1. You note "mobile signup keeps timing out" in an issue. `nora` reads
+   it next heartbeat, creates a task under goal `ship-mobile-v1`:
+   "Retry signup request with exponential backoff on network failure".
+2. `nora` → `promote_task` → `todo` → `send_message(to="kenji")`.
+3. `kenji` claims on branch `agent/kenji/task-<id>`, implements the
+   retry, tests on both simulators, `submit_for_review`.
+4. Event trigger wakes `sandor` right away (no waiting for next tick).
+   He reads the diff, notices the retry has no jitter. `changes_requested`
+   with reasoning. Task → `in_progress`; `kenji` gets the message.
+5. `kenji` adds jitter, resubmits. `sandor` approves. Task → `review`
+   (peer-approved, waiting on you).
+6. In parallel, `iris` had already opened a sibling task for the
+   signup empty state illustration. She shipped the asset, zoe wired it
+   into the marketing page, and that task also ended `review`.
+7. You approve both in the UI, click Push. Discord embed confirms.
+   21:00 — the daily digest says "2 shipped · kenji, iris".
+
+### Scaling rules
+
+- **Solo / week 1**: 1 worker + 1 reviewer. Add `nora` once you have
+  3+ active goals.
+- **Small team**: `nora` + 2 workers covering your primary packages +
+  `sandor`. Skip marketing and design until you have a real marketing
+  surface or design system to own.
+- **Heavier team**: add specialists the same way — a `security-priya`
+  reviewer with a security-hardening SOUL, or a `sre-takeshi` worker
+  with `scope.packages = ["infra"]` alongside `mira`.
+
+The shape of the team should mirror the shape of your repo.
 
 ---
 
