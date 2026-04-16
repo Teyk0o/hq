@@ -43,16 +43,16 @@
 ### UI / UX manquants
 
 - [x] **21. Création de task dans l'UI** — CLI only aujourd'hui.
-- [ ] **22. Édition de goals dans l'UI**.
+- [x] **22. Édition de goals dans l'UI**. *(/goals CRUD: create + pause/activate toggle + delete, open-tasks counter, bus events)*
 - [x] **23. Filtres board** (par assignee, priority, package, goal).
 - [x] **24. Search** (par titre ou ID). *(search par titre via input `search`, ID au hover)*
 - [x] **25. Comments humains** — peut review mais pas commenter.
-- [ ] **26. Pause/resume par agent** (pas que global).
-- [ ] **27. Archived agents filter** — une fois archivé, introuvable dans l'UI.
-- [ ] **28. Vue multi-projets** (`/board/all`) — mentionnée DESIGN, pas codée.
-- [ ] **29. Settings page** — voir la config compilée, éditer les seuils.
+- [x] **26. Pause/resume par agent** (pas que global). *(status 'paused' distinct de 'paused_quota', boutons sur agent card, scheduler skip)*
+- [x] **27. Archived agents filter** — une fois archivé, introuvable dans l'UI. *(toggle ?archived=1 sur /agents + bouton Archive/Restore par card)*
+- [x] **28. Vue multi-projets** (`/board/all`) — mentionnée DESIGN, pas codée. *(grid de project summary cards avec counts + agents stack + shortcut sidebar)*
+- [x] **29. Settings page** — voir la config compilée, éditer les seuils. *(read-only, sections Project/Scheduler/Heartbeat/Kanban/Sandbox/Rules&Goals, path hint vers project.toml)*
 - [ ] **30. Dashboard metrics** (throughput, tokens/projet/semaine, velocity).
-- [ ] **31. Loading skeletons** au lieu de "loading…".
+- [x] **31. Loading skeletons** au lieu de "loading…". *(CSS .skel shimmer pour usage widget + sidebar team + anywhere)*
 - [x] **32. Error toasts** quand une action HTMX foire.
 - [x] **33. Inbox messages inter-agents** — `send_message` marche côté MCP, pas de vue UI.
 
@@ -67,7 +67,7 @@
 ### Notifications
 
 - [x] **39. Discord webhook** — code écrit, jamais testé. *(bus subscriber POST embed Discord pour chaque event configuré dans project.toml, fire-and-forget)*
-- [ ] **40. Browser Notification API** — toast only pour l'instant.
+- [x] **40. Browser Notification API** — toast only pour l'instant. *(bouton sidebar, permission persistée localStorage, notifs sur review/blocked/message quand tab hors focus)*
 - [ ] **41. Digest quotidien** — résumé de la journée d'agents.
 
 ## 🟢 Polish / nice-to-have pour une v1
@@ -171,7 +171,7 @@ utilisateur, tests unitaires, CI GitHub Actions.
 - **44. Dépendances de tasks** — enforcer `task_dependencies`, bloquer
   tant que les deps ne sont pas `done`, auto-unblock au reverse.
 
-### ⏳ Sprint G — Human UX complete (7 items)
+### ✅ Sprint G — Human UX complete (7 items)
 
 > Objectif : l'UI couvre tous les workflows humain, plus de CLI obligatoire.
 
