@@ -148,21 +148,21 @@ export const Kanban: FC<{ tasks: KanbanTask[]; project: string; agents: AgentPre
   agents,
 }) => (
   <div
-    class="grid gap-5 pb-4 overflow-x-auto swap-in"
+    class="h-full grid gap-5 overflow-x-auto swap-in"
     style="grid-template-columns: repeat(7, minmax(280px, 1fr))"
   >
     {COLUMNS.map((col) => {
       const colTasks = tasks.filter((t) => t.status === col.state);
       return (
-        <section class="flex flex-col">
-          <header class="flex items-center gap-2 px-1 mb-3">
+        <section class="flex flex-col min-h-0 h-full">
+          <header class="flex items-center gap-2 px-1 mb-3 shrink-0">
             <span class="inline-flex items-center justify-center" style={`color:${col.accent}`}>
               <i data-lucide={col.icon}></i>
             </span>
             <h2 class="text-[14px] font-semibold">{col.label}</h2>
             <span class="text-[13px] text-faint mono ml-auto">{colTasks.length}</span>
           </header>
-          <div class="flex flex-col gap-3">
+          <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pr-1 pb-2">
             {colTasks.length === 0 && (
               <div class="text-[13px] text-faint py-4 px-1 text-center italic">Empty</div>
             )}

@@ -213,14 +213,14 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
       />
     </head>
     <body
-      class="min-h-screen"
+      class="h-screen overflow-hidden"
       hx-ext="sse"
       sse-connect={`/events${project ? `?project=${project}` : ''}`}
     >
-      <div class="flex min-h-screen">
+      <div class="flex h-screen">
         {/* Sidebar */}
-        <aside class="w-[280px] shrink-0 border-r border-soft flex flex-col" style="background: var(--surface-alt)">
-          <div class="p-5 flex-1">
+        <aside class="w-[280px] shrink-0 border-r border-soft flex flex-col h-screen" style="background: var(--surface-alt)">
+          <div class="p-5 flex-1 overflow-y-auto">
             <div class="flex items-center gap-2.5 px-1">
               <div
                 class="w-8 h-8 rounded-lg flex items-center justify-center text-white"
@@ -278,8 +278,8 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         </aside>
 
         {/* Main */}
-        <main class="flex-1 min-w-0">
-          <header class="px-10 py-6 flex items-center justify-between border-b border-soft" style="background: var(--bg)">
+        <main class="flex-1 min-w-0 flex flex-col h-screen">
+          <header class="px-10 py-6 flex items-center justify-between border-b border-soft shrink-0" style="background: var(--bg)">
             <div>
               <h1 class="text-[28px] font-semibold leading-tight">{title}</h1>
               {project && (
@@ -299,7 +299,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
               <span class="text-[13px] text-faint">loading…</span>
             </div>
           </header>
-          <div class="px-10 py-7">{children}</div>
+          <div class="flex-1 min-h-0 px-10 py-7 flex flex-col overflow-hidden">{children}</div>
         </main>
       </div>
 

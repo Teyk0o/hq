@@ -154,6 +154,7 @@ export function createApp(options: UiServerOptions): Hono {
         />
         <div
           id="board"
+          class="flex-1 min-h-0"
           hx-get={`/board/inner?${queryParams.toString()}`}
           hx-trigger="sse:task.status_changed from:body, sse:task.created from:body, sse:task.claimed from:body, sse:task.blocked from:body, sse:task.unblocked from:body, sse:task.pushed from:body"
           hx-swap="innerHTML"
