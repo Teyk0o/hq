@@ -5,7 +5,7 @@ export interface LayoutProps {
   title?: string;
   project?: string;
   projects?: string[];
-  page?: 'board' | 'agents' | 'activity' | 'inbox' | 'goals' | 'settings';
+  page?: 'board' | 'agents' | 'activity' | 'inbox' | 'goals' | 'settings' | 'metrics';
 }
 
 /**
@@ -343,7 +343,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
               />
               <NavItem href={`/activity?project=${project ?? ''}`} active={page === 'activity'} icon="activity" label="Activity" />
               <NavItem href={`/goals?project=${project ?? ''}`} active={page === 'goals'} icon="target" label="Goals" />
-              <NavItem href={`/metrics?project=${project ?? ''}`} active={false} icon="bar-chart-2" label="Metrics" />
+              <NavItem href={`/metrics?project=${project ?? ''}`} active={page === 'metrics'} icon="bar-chart-2" label="Metrics" />
               <NavItem href={`/settings?project=${project ?? ''}`} active={page === 'settings'} icon="settings" label="Settings" />
             </nav>
 

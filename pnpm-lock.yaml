@@ -99,6 +99,9 @@ importers:
       '@hq/core':
         specifier: workspace:*
         version: link:../core
+      '@hq/daemon':
+        specifier: workspace:*
+        version: link:../daemon
       '@hq/mcp':
         specifier: workspace:*
         version: link:../mcp

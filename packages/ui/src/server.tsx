@@ -717,7 +717,7 @@ export function createApp(options: UiServerOptions): Hono {
     const tasks_by_status: Record<string, number> = {};
     for (const r of tasks_by_status_rows) tasks_by_status[r.status] = r.n;
     return c.html(
-      <Layout project={project} projects={projectNames} title="Metrics" page="board">
+      <Layout project={project} projects={projectNames} title="Metrics" page="metrics">
         <MetricsPage
           data={{
             throughput7d,
