@@ -81,10 +81,10 @@
 
 ### Sécurité (défense en profondeur)
 
-- [ ] **46. Bash gate à l'intérieur du sandbox** — aujourd'hui il tourne côté host via le hook, devrait être dans le bwrap.
-- [ ] **47. `~/.claude/.credentials.json` RW** — agent pourrait read/write ; envisager un bind read-only avec un symlink writable minimal.
-- [ ] **48. Audit des commandes Bash** — logger chaque commande exécutée.
-- [ ] **49. Mode "full readonly"** — pour un agent audit 100% qui ne peut rien modifier.
+- [x] **46. Bash gate à l'intérieur du sandbox** — aujourd'hui il tourne côté host via le hook, devrait être dans le bwrap. *(vérifié : le hook est spawné par Claude qui tourne dans bwrap, donc le hook hérite des namespaces. Doc ajoutée dans bash-gate.ts.)*
+- [x] **47. `~/.claude/.credentials.json` RW** — agent pourrait read/write ; envisager un bind read-only avec un symlink writable minimal. *(--ro-bind-try overlay sur le fichier spécifique, par-dessus le --bind writable de ~/.claude)*
+- [x] **48. Audit des commandes Bash** — logger chaque commande exécutée. *(bash-gate écrit une ligne activity bash.allowed / bash.denied avec commande tronquée + reason, best-effort)*
+- [x] **49. Mode "full readonly"** — pour un agent audit 100% qui ne peut rien modifier. *(agent.toml readonly_strict=true, rules-gate refuse Edit/Write/MultiEdit/NotebookEdit avant même d'évaluer les règles projet)*
 
 ### Déploiement
 
@@ -202,7 +202,7 @@ utilisateur, tests unitaires, CI GitHub Actions.
 - **38. Replay d'un heartbeat** — cliquer sur une ligne `heartbeats`
   ouvre un drawer avec le log, les tools appelés, les events émis.
 
-### ⏳ Sprint I — Safety hardening (4 items)
+### ✅ Sprint I — Safety hardening (4 items)
 
 > Objectif : défense en profondeur sur le sandbox.
 
