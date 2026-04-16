@@ -818,6 +818,173 @@ export const AgentsList: FC<{
   </div>
 );
 
+export interface GoalRow {
+  id: string;
+  title: string;
+  description: string;
+  assignees: string[];
+  tasks_per_week: number;
+  active: boolean;
+  open_tasks: number;
+}
+
+export const GoalsPage: FC<{
+  project: string;
+  goals: GoalRow[];
+  agents: AgentPresentation[];
+}> = ({ project, goals, agents }) => (
+  <div class="max-w-4xl space-y-5">
+    <GoalCreateForm project={project} agents={agents} />
+    {goals.length === 0 ? (
+      <p class="text-[14px] text-faint italic text-center py-6">
+        No goals yet — create one to let the boss generate tasks automatically.
+      </p>
+    ) : (
+      <ul class="space-y-3">
+        {goals.map((g) => (
+          <GoalCard goal={g} project={project} agents={agents} />
+        ))}
+      </ul>
+    )}
+  </div>
+);
+
+const GoalCreateForm: FC<{ project: string; agents: AgentPresentation[] }> = ({
+  project,
+  agents,
+}) => (
+  <details class="card p-0 overflow-hidden">
+    <summary
+      class="px-5 py-4 flex items-center gap-2 cursor-pointer list-none hover-bg"
+      style="user-select:none"
+    >
+      <i data-lucide="plus-circle"></i>
+      <span class="font-semibold text-[14px]">Add a goal</span>
+      <i data-lucide="chevron-down" class="icon-sm ml-auto" style="color:var(--ink-faint)"></i>
+    </summary>
+    <form
+      class="px-5 pb-5 flex flex-col gap-4"
+      hx-post={`/api/goals?project=${project}`}
+      hx-target="#goals-root"
+      hx-swap="outerHTML"
+    >
+      <div class="grid grid-cols-2 gap-4">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">ID</span>
+          <input name="id" class="field" placeholder="e.g. ship-v1" required />
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Title</span>
+          <input name="title" class="field" required />
+        </label>
+      </div>
+      <label class="flex flex-col gap-1.5">
+        <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Description</span>
+        <textarea name="description" rows={3} class="field" placeholder="Why this goal matters" />
+      </label>
+      <div class="grid grid-cols-2 gap-4">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Assignees</span>
+          <input
+            name="assignees"
+            class="field"
+            placeholder="comma-separated (e.g. alice, bob)"
+          />
+          <span class="text-[11px] text-faint">
+            Known: {agents.map((a) => a.name).join(', ') || '(none)'}
+          </span>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Tasks per week</span>
+          <input name="tasks_per_week" type="number" min="0" value="0" class="field" />
+        </label>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i data-lucide="plus"></i> Create goal
+        </button>
+      </div>
+    </form>
+  </details>
+);
+
+const GoalCard: FC<{
+  goal: GoalRow;
+  project: string;
+  agents: AgentPresentation[];
+}> = ({ goal, project, agents }) => (
+  <li class="card p-5">
+    <div class="flex items-start gap-3">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span
+            class="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full"
+            style={
+              goal.active
+                ? 'color: var(--success); background: var(--success-soft)'
+                : 'color: var(--ink-faint); background: var(--surface-alt)'
+            }
+          >
+            <span
+              class="w-1.5 h-1.5 rounded-full"
+              style={`background: ${goal.active ? 'var(--success)' : 'var(--ink-faint)'}`}
+            />
+            {goal.active ? 'active' : 'paused'}
+          </span>
+          <h3 class="text-[15px] font-semibold">{goal.title}</h3>
+          <span class="ml-auto text-[11px] text-faint mono">{goal.id}</span>
+        </div>
+        {goal.description && (
+          <p class="text-[13px] text-muted mt-2 whitespace-pre-wrap">{goal.description}</p>
+        )}
+        <div class="mt-3 flex items-center gap-4 text-[12px] text-muted flex-wrap">
+          <span class="inline-flex items-center gap-1.5">
+            <i data-lucide="repeat" class="icon-sm"></i>
+            {goal.tasks_per_week}/week
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <i data-lucide="list" class="icon-sm"></i>
+            {goal.open_tasks} open task(s)
+          </span>
+          {goal.assignees.length > 0 && (
+            <span class="inline-flex items-center gap-1">
+              <i data-lucide="users" class="icon-sm"></i>
+              {goal.assignees.map((a) => (
+                <span class="inline-flex items-center gap-1 ml-1 text-muted">
+                  <Avatar agent={agentFor(agents, a)} size={18} />
+                  {a}
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 flex items-center gap-2 border-t border-soft pt-3">
+      <button
+        class="btn btn-sm"
+        hx-post={`/api/goals/${goal.id}/toggle?project=${project}`}
+        hx-target="#goals-root"
+        hx-swap="outerHTML"
+      >
+        <i data-lucide={goal.active ? 'pause' : 'play'}></i>
+        {goal.active ? 'Pause' : 'Activate'}
+      </button>
+      <button
+        class="btn btn-sm"
+        style="color: var(--danger)"
+        hx-delete={`/api/goals/${goal.id}?project=${project}`}
+        hx-confirm={`Delete goal "${goal.title}"?`}
+        hx-target="#goals-root"
+        hx-swap="outerHTML"
+      >
+        <i data-lucide="trash-2"></i>
+        Delete
+      </button>
+    </div>
+  </li>
+);
+
 /** Small labelled key/value row used on the Settings page. */
 const SettingRow: FC<{ label: string; value: string | number | boolean }> = ({
   label,

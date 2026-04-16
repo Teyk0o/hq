@@ -12,6 +12,7 @@ import {
   ActivityFeed,
   AgentsList,
   BoardHeader,
+  GoalsPage,
   Inbox,
   Kanban,
   SettingsPage,
@@ -23,6 +24,7 @@ import {
   type Filters,
   type GenderHint,
   type GitCommit,
+  type GoalRow,
   type KanbanTask,
 } from './views';
 import { Layout } from './layout';
@@ -314,6 +316,104 @@ export function createApp(options: UiServerOptions): Hono {
       return gender ? { ...s, gender: gender as GenderHint } : s;
     });
     return c.html(<SidebarAgents agents={merged} />);
+  });
+
+  const renderGoalsRoot = (project: string) => {
+    const db = openDb(project);
+    const rows = db
+      .prepare(
+        `SELECT g.id, g.title, g.description, g.assignees, g.tasks_per_week, g.active,
+            (SELECT COUNT(*) FROM tasks t WHERE t.goal_id = g.id AND t.status != 'done') AS open_tasks
+         FROM goals g ORDER BY g.active DESC, g.created_at DESC`,
+      )
+      .all() as Array<{
+      id: string;
+      title: string;
+      description: string;
+      assignees: string;
+      tasks_per_week: number;
+      active: number;
+      open_tasks: number;
+    }>;
+    db.close();
+    const goals: GoalRow[] = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      assignees: JSON.parse(r.assignees || '[]') as string[],
+      tasks_per_week: r.tasks_per_week,
+      active: Boolean(r.active),
+      open_tasks: r.open_tasks,
+    }));
+    return goals;
+  };
+
+  app.get('/goals', async (c) => {
+    const project = currentProject(c.req.raw);
+    const goals = renderGoalsRoot(project);
+    const agents = await loadAgentPresentations(project);
+    return c.html(
+      <Layout project={project} projects={projectNames} title="Goals" page="goals">
+        <div id="goals-root">
+          <GoalsPage project={project} goals={goals} agents={agents} />
+        </div>
+      </Layout>,
+    );
+  });
+
+  // Returns the goals-root fragment only, for HTMX swaps after mutations.
+  const goalsFragment = async (project: string) => {
+    const goals = renderGoalsRoot(project);
+    const agents = await loadAgentPresentations(project);
+    return (
+      <div id="goals-root">
+        <GoalsPage project={project} goals={goals} agents={agents} />
+      </div>
+    );
+  };
+
+  app.post('/api/goals', async (c) => {
+    const project = currentProject(c.req.raw);
+    const form = await c.req.parseBody();
+    const id = String(form.id ?? '').trim();
+    const title = String(form.title ?? '').trim();
+    if (!id || !title) return c.json({ error: 'id and title required' }, 400);
+    const description = String(form.description ?? '').trim();
+    const assignees = String(form.assignees ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const tpw = Number.parseInt(String(form.tasks_per_week ?? '0'), 10) || 0;
+    const db = openDb(project);
+    db.prepare(
+      `INSERT INTO goals (id, title, description, assignees, tasks_per_week, active)
+       VALUES (?, ?, ?, ?, ?, 1)`,
+    ).run(id, title, description, JSON.stringify(assignees), tpw);
+    db.close();
+    bus.publish({ type: 'goal.created', goal_id: id });
+    return c.html(await goalsFragment(project));
+  });
+
+  app.post('/api/goals/:id/toggle', async (c) => {
+    const project = currentProject(c.req.raw);
+    const id = c.req.param('id');
+    const db = openDb(project);
+    db.prepare(
+      `UPDATE goals SET active = 1 - active, updated_at = ? WHERE id = ?`,
+    ).run(Date.now(), id);
+    db.close();
+    bus.publish({ type: 'goal.updated', goal_id: id });
+    return c.html(await goalsFragment(project));
+  });
+
+  app.delete('/api/goals/:id', async (c) => {
+    const project = currentProject(c.req.raw);
+    const id = c.req.param('id');
+    const db = openDb(project);
+    db.prepare(`DELETE FROM goals WHERE id = ?`).run(id);
+    db.close();
+    bus.publish({ type: 'goal.updated', goal_id: id });
+    return c.html(await goalsFragment(project));
   });
 
   app.get('/settings', async (c) => {
