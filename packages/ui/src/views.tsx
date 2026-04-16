@@ -64,7 +64,7 @@ export const FilterBar: FC<{
         type="button"
         class={`pill ${active ? 'pill-active' : ''}`}
         hx-get={`/board/inner?${qs}`}
-        hx-target="#board"
+        hx-target="#board-surface"
         hx-swap="innerHTML"
         hx-push-url={`/board?${qs}`}
       >
@@ -124,7 +124,7 @@ export const BoardHeader: FC<{
             style="padding-left: 36px"
             hx-get={`/board/inner?${sharedParams.toString()}`}
             hx-trigger="keyup changed delay:300ms, search"
-            hx-target="#board"
+            hx-target="#board-surface"
             hx-swap="innerHTML"
             hx-push-url="true"
             hx-include="this"

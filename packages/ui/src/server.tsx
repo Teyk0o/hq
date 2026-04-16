@@ -159,20 +159,24 @@ export function createApp(options: UiServerOptions): Hono {
     if (filters.search) queryParams.set('search', filters.search);
     return c.html(
       <Layout project={project} projects={projectNames} title="Board" page="board">
-        <BoardHeader
-          project={project}
-          filters={filters}
-          assignees={assignees}
-          packages={packages}
-        />
+        {/* Single swap target: filter bar + grid together, so clicking a pill
+            updates BOTH the active-pill state and the kanban without a reload. */}
         <div
-          id="board"
-          class="flex-1 min-h-0"
+          id="board-surface"
+          class="flex-1 min-h-0 flex flex-col"
           hx-get={`/board/inner?${queryParams.toString()}`}
           hx-trigger="sse:task.status_changed from:body, sse:task.created from:body, sse:task.claimed from:body, sse:task.blocked from:body, sse:task.unblocked from:body, sse:task.pushed from:body"
           hx-swap="innerHTML"
         >
-          <Kanban tasks={tasks} project={project} agents={agents} />
+          <BoardHeader
+            project={project}
+            filters={filters}
+            assignees={assignees}
+            packages={packages}
+          />
+          <div id="board" class="flex-1 min-h-0">
+            <Kanban tasks={tasks} project={project} agents={agents} />
+          </div>
         </div>
         <div id="drawer" />
       </Layout>,
@@ -182,9 +186,21 @@ export function createApp(options: UiServerOptions): Hono {
   app.get('/board/inner', async (c) => {
     const project = currentProject(c.req.raw);
     const filters = parseFilters(c.req.raw);
-    const { tasks } = renderBoard(project, filters);
+    const { tasks, assignees, packages } = renderBoard(project, filters);
     const agents = await loadAgentPresentations(project);
-    return c.html(<Kanban tasks={tasks} project={project} agents={agents} />);
+    return c.html(
+      <>
+        <BoardHeader
+          project={project}
+          filters={filters}
+          assignees={assignees}
+          packages={packages}
+        />
+        <div id="board" class="flex-1 min-h-0">
+          <Kanban tasks={tasks} project={project} agents={agents} />
+        </div>
+      </>,
+    );
   });
 
   app.get('/task/new', (c) => {
