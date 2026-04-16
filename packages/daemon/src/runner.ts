@@ -34,6 +34,27 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
     join(options.projectPath, '.hq', 'agents', `${options.agentName}.toml`),
   );
 
+  // Guard against firing a heartbeat on an agent the operator just paused,
+  // archived, or which the quota poller put in paused_quota. The scheduler
+  // filters these out upstream, but manual `hq agent run` and in-flight
+  // event triggers can race with a human clicking Pause.
+  const currentState = options.db
+    .select()
+    .from(agentState)
+    .where(eq(agentState.name, options.agentName))
+    .get();
+  if (
+    currentState &&
+    (currentState.status === 'paused' ||
+      currentState.status === 'paused_quota' ||
+      currentState.status === 'archived')
+  ) {
+    console.log(
+      `[runner] skip ${options.agentName}: status=${currentState.status}`,
+    );
+    return;
+  }
+
   const slug = slugify(project.project.name);
   const session = tmux.sessionName(slug, options.agentName);
   const worktreeDir = join(options.projectPath, project.git.worktree_dir, options.agentName);

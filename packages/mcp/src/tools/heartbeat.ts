@@ -93,9 +93,12 @@ export async function endHeartbeat(
       })
       .where(eq(heartbeatsTable.id, id))
       .run();
+    // Only transition to idle from working. If the operator paused or
+    // archived the agent mid-heartbeat, preserve that intent — otherwise
+    // the scheduler's next tick would pick the agent straight back up.
     tx.update(agentState)
       .set({ status: 'idle' })
-      .where(eq(agentState.name, ctx.agentName))
+      .where(and(eq(agentState.name, ctx.agentName), eq(agentState.status, 'working')))
       .run();
     tx.insert(activityTable)
       .values({

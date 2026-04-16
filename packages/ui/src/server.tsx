@@ -339,9 +339,26 @@ export function createApp(options: UiServerOptions): Hono {
       const gender = genderByName.get(s.name);
       return gender ? { ...s, gender: gender as GenderHint } : s;
     });
+    const url2 = new URL(c.req.raw.url);
+    const qs = new URLSearchParams();
+    qs.set('project', project);
+    if (showArchived) qs.set('archived', '1');
+    // If the request targets the inner fragment, return just the list.
+    if (url2.searchParams.get('fragment') === '1') {
+      return c.html(
+        <AgentsList agents={merged} project={project} showArchived={showArchived} />,
+      );
+    }
     return c.html(
       <Layout project={project} projects={projectNames} title="Agents" page="agents">
-        <AgentsList agents={merged} project={project} showArchived={showArchived} />
+        <div
+          id="agents-root"
+          hx-get={`/agents?${qs.toString()}&fragment=1`}
+          hx-trigger="sse:agent.status_changed from:body, sse:agent.archived from:body, sse:agent.heartbeat_started from:body, sse:agent.heartbeat_ended from:body"
+          hx-swap="innerHTML"
+        >
+          <AgentsList agents={merged} project={project} showArchived={showArchived} />
+        </div>
       </Layout>,
     );
   });
@@ -379,17 +396,23 @@ export function createApp(options: UiServerOptions): Hono {
   app.post('/api/agents/:name/pause', (c) => {
     const name = c.req.param('name');
     const project = currentProject(c.req.raw);
+    // Accept pause from any state except archived. When the agent is
+    // currently 'working', the MCP's end_heartbeat will land on 'paused'
+    // instead of 'idle' because we set the target state here first and
+    // runner.ts guards against re-triggering paused agents.
     const ok = mutateAgent(project, name, (s) =>
-      s === 'idle' || s === 'blocked' ? { status: 'paused' } : null,
+      s !== 'archived' ? { status: 'paused' } : null,
     );
-    return ok ? c.body(null, 204) : c.json({ error: 'cannot pause in current state' }, 409);
+    return ok ? c.body(null, 204) : c.json({ error: 'cannot pause archived agent' }, 409);
   });
 
   app.post('/api/agents/:name/resume', (c) => {
     const name = c.req.param('name');
     const project = currentProject(c.req.raw);
     const ok = mutateAgent(project, name, (s) =>
-      s === 'paused' || s === 'blocked' ? { status: 'idle', blocked_reason: null } : null,
+      s === 'paused' || s === 'paused_quota' || s === 'blocked'
+        ? { status: 'idle', blocked_reason: null }
+        : null,
     );
     return ok ? c.body(null, 204) : c.json({ error: 'cannot resume in current state' }, 409);
   });
