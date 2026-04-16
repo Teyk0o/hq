@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in HQ is broken.
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: One or two sentences. What did you expect, what did you get?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands, CLI output, SQL state — whatever is needed to re-trigger it.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: HQ version
+      description: "Output of `hq --version`."
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: bun
+    attributes:
+      label: Bun version
+      description: "Output of `bun --version`."
+      placeholder: "1.1.42"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "Ubuntu 24.04 / macOS 14.5 / …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "`~/.hq/daemon.log`, stderr from the failing command, tmux session output — anything you have."
+      render: shell

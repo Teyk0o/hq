@@ -1,0 +1,25 @@
+name: Feature request
+description: Something HQ should do but doesn't.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you solving
+      description: Describe the pain first. Solutions come second.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like HQ to do
+      description: Rough sketch — CLI flag, UI surface, new MCP tool, config option, whatever.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Workarounds you've tried or rejected, other tools that handle this well.
