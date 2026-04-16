@@ -89,7 +89,7 @@ export class Scheduler {
     staggerSeconds: number,
   ): Promise<string[]> {
     const fired: string[] = [];
-    const agents = await listAgents(project.path);
+    const agentNames = await listAgents(project.path);
     const working = db
       .select()
       .from(agentState)
@@ -97,26 +97,38 @@ export class Scheduler {
       .all();
     let slots = Math.max(0, maxConcurrent - working.length);
 
-    for (const agentName of agents) {
-      if (slots <= 0) break;
-      const state = db.select().from(agentState).where(eq(agentState.name, agentName)).get();
+    // Load balancing: pick the "coolest" eligible agent first. Sorting by
+    // (tokens_today asc, last_heartbeat asc NULLS first) pushes recently-
+    // active / token-hungry agents to the back so quieter ones get a turn
+    // before the talkative ones monopolise the slot budget. Agents with a
+    // non-idle status are filtered out, not ranked.
+    const candidates = [];
+    for (const name of agentNames) {
+      const state = db.select().from(agentState).where(eq(agentState.name, name)).get();
       if (!state) continue;
-      if (state.status === 'working' || state.status === 'archived') continue;
-      if (state.status === 'paused_quota') continue;
+      if (state.status !== 'idle') continue;
+      candidates.push({ name, tokens: state.tokensToday, last: state.lastHeartbeat ?? 0 });
+    }
+    candidates.sort((a, b) => a.tokens - b.tokens || a.last - b.last);
 
+    for (const candidate of candidates) {
+      if (slots <= 0) break;
       const agentCfg = await loadAgentConfig(
-        join(project.path, '.hq', 'agents', `${agentName}.toml`),
+        join(project.path, '.hq', 'agents', `${candidate.name}.toml`),
       );
       if (!agentCfg.agent.active) continue;
 
       // Stagger between agents within the same tick.
       if (slots < maxConcurrent) await sleep(staggerSeconds * 1000);
       try {
-        await triggerHeartbeat({ projectPath: project.path, agentName, db });
-        fired.push(agentName);
+        await triggerHeartbeat({ projectPath: project.path, agentName: candidate.name, db });
+        fired.push(candidate.name);
         slots -= 1;
       } catch (err) {
-        console.error(`[scheduler] ${project.name}/${agentName} heartbeat failed:`, err);
+        console.error(
+          `[scheduler] ${project.name}/${candidate.name} heartbeat failed:`,
+          err,
+        );
       }
     }
     return fired;

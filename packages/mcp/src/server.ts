@@ -243,6 +243,7 @@ export async function startMcpServer(options: StartServerOptions): Promise<void>
     agentName: agent.agent.name,
     agentRole: agent.agent.role,
     capabilities: resolveCapabilities(agent.agent.role, agent.capabilities),
+    scopePackages: agent.scope?.packages ?? [],
     db,
     bus: getSharedBus(),
     currentHeartbeatId: null,

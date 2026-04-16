@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type {
   AgentCapabilities,
@@ -23,10 +23,31 @@ export interface HeartbeatPromptContext {
   timeoutMinutes: number;
 }
 
+/** Per-agent cache of the SOUL mtime last seen; lets the runner emit a clear
+ *  log line when the operator edits the SOUL between heartbeats. */
+const soulMtimeCache = new Map<string, number>();
+
 /** Build the heartbeat prompt to inject into the agent's tmux session. */
 export async function buildHeartbeatPrompt(ctx: HeartbeatPromptContext): Promise<string> {
   const soulPath = join(ctx.projectPath, '.hq', 'agents', ctx.agentConfig.agent.soul);
   const soul = await tryRead(soulPath, '(no SOUL.md found)');
+
+  // Hot-reload detection: log when the SOUL file changed since the previous
+  // heartbeat so the operator can see their edit landed.
+  try {
+    const st = await stat(soulPath);
+    const key = `${ctx.projectPath}:${ctx.agentName}`;
+    const previous = soulMtimeCache.get(key);
+    const current = st.mtimeMs;
+    if (previous !== undefined && current !== previous) {
+      console.log(
+        `[soul] ${ctx.agentName}: SOUL updated (${new Date(current).toISOString()}), reloaded for this heartbeat`,
+      );
+    }
+    soulMtimeCache.set(key, current);
+  } catch {
+    // no file, no cache
+  }
 
   const progressPath = join(ctx.projectPath, '.hq', 'progress', `${ctx.agentName}.md`);
   const progress = await tryRead(progressPath, '(no prior progress)');

@@ -151,11 +151,15 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
  * reaches retry_max, the agent is flipped to `blocked` so the scheduler stops
  * feeding a cursed session.
  */
+export interface ReapResult {
+  reaped: Array<{ agent: string; heartbeat_id: string; giveUp: boolean }>;
+}
+
 export async function reapStaleHeartbeats(
   db: HQDatabase,
   defaultTimeoutMinutes: number,
   retryMax = 2,
-): Promise<void> {
+): Promise<ReapResult> {
   const threshold = Date.now() - defaultTimeoutMinutes * 60_000;
   const stale = db
     .select()
@@ -164,6 +168,7 @@ export async function reapStaleHeartbeats(
     .all()
     .filter((h) => h.startedAt < threshold);
 
+  const reaped: ReapResult['reaped'] = [];
   for (const h of stale) {
     const nextRetry = h.retryCount + 1;
     const giveUp = nextRetry > retryMax;
@@ -196,7 +201,9 @@ export async function reapStaleHeartbeats(
         .where(and(eq(tasksTable.assignee, h.agent), eq(tasksTable.status, 'in_progress')))
         .run();
     });
+    reaped.push({ agent: h.agent, heartbeat_id: h.id, giveUp });
   }
+  return { reaped };
 }
 
 function slugify(s: string): string {

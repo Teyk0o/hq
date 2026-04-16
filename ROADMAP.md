@@ -13,8 +13,8 @@
 - [x] **3. Gate `peer_review → in_progress` sur `changes_requested`** — pas câblée.
 - [x] **4. Goals → tasks auto-gen** — boss agent est censé créer N tasks/semaine depuis les goals, jamais implémenté. *(goals + throughput récent injectés dans le prompt des agents can_create_tasks, protocole étendu pour les pousser à créer/promouvoir)*
 - [x] **5. Retry sur crash/timeout** — `retry_max` configuré, jamais lu. *(reaper incrémente retry_count, agent marque blocked après retry_max timeouts)*
-- [ ] **6. Auto-resume après auto-pause budget** — on pause mais jamais on reprend au reset.
-- [ ] **7. Hot reload SOUL.md / agent.toml** — documenté, à vérifier en conditions réelles.
+- [x] **6. Auto-resume après auto-pause budget** — on pause mais jamais on reprend au reset. *(QuotaPoller détecte la transition paused→resumed, émet `daemon.quota_paused` / `daemon.quota_resumed` sur le bus, respecte resume_on_reset)*
+- [x] **7. Hot reload SOUL.md / agent.toml** — documenté, à vérifier en conditions réelles. *(buildHeartbeatPrompt lit SOUL à chaque heartbeat + trace mtime, log explicite "SOUL updated" quand l'operator a édité)*
 
 ### Safety / garde-fous
 
@@ -35,7 +35,7 @@
 
 - [x] **17. Migrations DB** — drizzle-kit configuré mais les migrations générées ne sont pas exécutées ; le schéma vit dans `schema-ddl.ts` embarqué dans l'init, divergence possible. *(schema unifié dans @hq/core, appliqué idempotent par openProjectDb — drizzle-kit migrations reste à câbler proprement)*
 - [x] **18. Cleanup tmux orphelines** — si le daemon crashe, les sessions tmux survivent mais personne ne les réconcilie.
-- [ ] **19. Heartbeat reaper** — code existe, jamais observé en timeout réel.
+- [x] **19. Heartbeat reaper** — code existe, jamais observé en timeout réel. *(reaper retourne ReapResult, tests unitaires qui simulent stale+retry+giveUp, logs par agent)*
 - [x] **20. Erreurs MCP** — remontent en exception brute, devraient retourner du JSON structuré que l'agent peut gérer.
 
 ## 🟡 Important pour l'expérience v1
@@ -74,9 +74,9 @@
 
 ### Agents & scheduler
 
-- [ ] **42. Load balancing** — éviter qu'un agent prenne toutes les tasks.
-- [ ] **43. Agent capabilities check** — si un agent n'a pas les tools requis par la task, pas assignable.
-- [ ] **44. Dépendances de tasks** — `blocked` quand dep pas done, auto-unblock.
+- [x] **42. Load balancing** — éviter qu'un agent prenne toutes les tasks. *(scheduler trie les idle par tokens_today asc + last_heartbeat asc, les plus "froids" passent en premier)*
+- [x] **43. Agent capabilities check** — si un agent n'a pas les tools requis par la task, pas assignable. *(scope.packages agent vs task.package, claim refuse avec McpError 'out_of_scope')*
+- [x] **44. Dépendances de tasks** — `blocked` quand dep pas done, auto-unblock. *(claim refuse si dep pas done, push auto-unblock les dépendants dont toutes les deps sont done)*
 - [ ] **45. Stop propre d'un agent** — `hq agent stop` (kill tmux + mark idle).
 
 ### Sécurité (défense en profondeur)
@@ -154,7 +154,7 @@ utilisateur, tests unitaires, CI GitHub Actions.
 - **16. Gestion conflits** — si la branche de l'agent ne fast-forward pas,
   tenter rebase auto ; sinon transition `blocked` avec `blocked_reason`.
 
-### ⏳ Sprint F — Autonomy robustness (6 items)
+### ✅ Sprint F — Autonomy robustness (6 items)
 
 > Objectif : l'orchestration tient sur la durée sans intervention.
 
