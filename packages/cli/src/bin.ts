@@ -9,6 +9,7 @@ import {
   agentRun,
 } from './commands/agent';
 import { bashGateCommand } from './commands/bash-gate';
+import { rulesGateCommand } from './commands/rules-gate';
 import { debugReset, debugTest } from './commands/debug';
 import { daemonInstallService, daemonStart } from './commands/daemon';
 import { initCommand } from './commands/init';
@@ -137,6 +138,14 @@ program
   .requiredOption('--project <path>')
   .requiredOption('--agent <name>')
   .action(async (opts: { project: string; agent: string }) => bashGateCommand(opts));
+
+// Rules gate (internal, invoked by Claude Code PreToolUse hook on Edit/Write/MultiEdit)
+program
+  .command('rules-gate')
+  .description('Evaluate project [[rules]] against a file-editing tool call (hook usage)')
+  .requiredOption('--project <path>')
+  .requiredOption('--agent <name>')
+  .action(async (opts: { project: string; agent: string }) => rulesGateCommand(opts));
 
 program.parseAsync().catch((err) => {
   console.error(err);

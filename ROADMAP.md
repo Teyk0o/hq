@@ -12,15 +12,15 @@
 - [x] **2. Gate `peer_review → review` auto** — le code compte les approvals mais ne déclenche pas la transition.
 - [x] **3. Gate `peer_review → in_progress` sur `changes_requested`** — pas câblée.
 - [x] **4. Goals → tasks auto-gen** — boss agent est censé créer N tasks/semaine depuis les goals, jamais implémenté. *(goals + throughput récent injectés dans le prompt des agents can_create_tasks, protocole étendu pour les pousser à créer/promouvoir)*
-- [ ] **5. Retry sur crash/timeout** — `retry_max` configuré, jamais lu.
+- [x] **5. Retry sur crash/timeout** — `retry_max` configuré, jamais lu. *(reaper incrémente retry_count, agent marque blocked après retry_max timeouts)*
 - [ ] **6. Auto-resume après auto-pause budget** — on pause mais jamais on reprend au reset.
 - [ ] **7. Hot reload SOUL.md / agent.toml** — documenté, à vérifier en conditions réelles.
 
 ### Safety / garde-fous
 
-- [ ] **8. Rules engine réel** — `[[rules]]` dans `project.toml` sont juste des données, aucune compilation en hooks Claude. Seul le bash-gate est actif. Les règles `require=doc_update`, `protected_paths`, `owner` n'existent pas encore.
-- [ ] **9. Transactions SQLite** — changements multi-tables (task + activity + review) ne sont pas atomiques.
-- [ ] **10. Audit log** — qui a appelé quel tool MCP quand ? Pas tracé.
+- [x] **8. Rules engine réel** — `[[rules]]` dans `project.toml` sont juste des données, aucune compilation en hooks Claude. Seul le bash-gate est actif. Les règles `require=doc_update`, `protected_paths`, `owner` n'existent pas encore. *(match + action=block/warn, protected_paths, owner, forbid_commands supportés. require=doc_update (qui exige un tracking de session cross-tool) reste à faire.)*
+- [x] **9. Transactions SQLite** — changements multi-tables (task + activity + review) ne sont pas atomiques. *(claim_task, submit_review, end/start_heartbeat, addComment+messages wrappés dans db.transaction)*
+- [x] **10. Audit log** — qui a appelé quel tool MCP quand ? Pas tracé. *(chaque tool call écrit une ligne activity `mcp.<tool>` avec input tronqué et outcome)*
 - [x] **11. Race conditions sur `claim_task`** — deux agents peuvent en théorie race-claim la même task (pas de verrou DB).
 
 ### Git & code flow

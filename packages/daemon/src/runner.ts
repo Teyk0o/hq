@@ -144,10 +144,17 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
 /**
  * Scan for agents whose heartbeat has exceeded their timeout and finalise them.
  * Called on a regular cadence by the daemon.
+ *
+ * Retry policy: if retry_count < retry_max, we mark the heartbeat as a timeout,
+ * unclaim its task, keep the agent idle, and the scheduler will pick the agent
+ * up again on the next tick (which triggers a fresh heartbeat). When retry_count
+ * reaches retry_max, the agent is flipped to `blocked` so the scheduler stops
+ * feeding a cursed session.
  */
 export async function reapStaleHeartbeats(
   db: HQDatabase,
   defaultTimeoutMinutes: number,
+  retryMax = 2,
 ): Promise<void> {
   const threshold = Date.now() - defaultTimeoutMinutes * 60_000;
   const stale = db
@@ -158,19 +165,37 @@ export async function reapStaleHeartbeats(
     .filter((h) => h.startedAt < threshold);
 
   for (const h of stale) {
-    db.update(heartbeatsTable)
-      .set({ endedAt: Date.now(), outcome: 'timeout' })
-      .where(eq(heartbeatsTable.id, h.id))
-      .run();
-    db.update(agentState)
-      .set({ status: 'idle' })
-      .where(eq(agentState.name, h.agent))
-      .run();
-    // Unclaim any in_progress task held by this agent.
-    db.update(tasksTable)
-      .set({ status: 'todo', assignee: null, updatedAt: Date.now() })
-      .where(and(eq(tasksTable.assignee, h.agent), eq(tasksTable.status, 'in_progress')))
-      .run();
+    const nextRetry = h.retryCount + 1;
+    const giveUp = nextRetry > retryMax;
+    const reason = giveUp
+      ? `heartbeat timed out ${nextRetry}/${retryMax} retries exhausted`
+      : `heartbeat timed out, will retry (${nextRetry}/${retryMax})`;
+    console.warn(`[reaper] ${h.agent}: ${reason}`);
+
+    db.transaction((tx) => {
+      tx.update(heartbeatsTable)
+        .set({
+          endedAt: Date.now(),
+          outcome: 'timeout',
+          retryCount: nextRetry,
+        })
+        .where(eq(heartbeatsTable.id, h.id))
+        .run();
+      tx.update(agentState)
+        .set(
+          giveUp
+            ? { status: 'blocked', blockedReason: 'heartbeat timeout retry exhausted' }
+            : { status: 'idle' },
+        )
+        .where(eq(agentState.name, h.agent))
+        .run();
+      // Orphan any in_progress task held by this agent so the next tick can
+      // re-claim it (or another worker can pick it up).
+      tx.update(tasksTable)
+        .set({ status: 'todo', assignee: null, updatedAt: Date.now() })
+        .where(and(eq(tasksTable.assignee, h.agent), eq(tasksTable.status, 'in_progress')))
+        .run();
+    });
   }
 }
 

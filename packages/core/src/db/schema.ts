@@ -142,6 +142,7 @@ export const heartbeats = sqliteTable(
     tokensUsed: integer('tokens_used').notNull().default(0),
     tasksWorked: text('tasks_worked').notNull().default('[]'),
     error: text('error'),
+    retryCount: integer('retry_count').notNull().default(0),
   },
   (t) => ({ agentIdx: index('heartbeats_agent').on(t.agent, t.startedAt) }),
 );

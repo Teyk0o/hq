@@ -108,7 +108,14 @@ CREATE TABLE IF NOT EXISTS heartbeats (
   log_path TEXT NOT NULL,
   tokens_used INTEGER NOT NULL DEFAULT 0,
   tasks_worked TEXT NOT NULL DEFAULT '[]',
-  error TEXT
+  error TEXT,
+  retry_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS heartbeats_agent ON heartbeats(agent, started_at);
+
+-- Add retry_count column to pre-existing heartbeats tables (idempotent:
+-- ALTER TABLE ADD COLUMN IF NOT EXISTS isn't standard SQLite syntax, so
+-- we wrap in a harmless error swallow via the app layer — DDL as-run is
+-- applied through openProjectDb() which chains PRAGMAs; a separate
+-- ALTER is handled in code.)
 `;

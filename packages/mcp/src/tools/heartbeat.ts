@@ -27,6 +27,11 @@ export async function startHeartbeat(ctx: McpContext): Promise<{ heartbeat_id: s
   let id: string;
   if (openRow) {
     id = openRow.id;
+    ctx.db
+      .update(agentState)
+      .set({ status: 'working', lastHeartbeat: Date.now() })
+      .where(eq(agentState.name, ctx.agentName))
+      .run();
   } else {
     id = newId();
     const startedAt = Date.now();
@@ -36,17 +41,19 @@ export async function startHeartbeat(ctx: McpContext): Promise<{ heartbeat_id: s
       logDir,
       `${new Date(startedAt).toISOString().replace(/[:.]/g, '-')}.log`,
     );
-    ctx.db
-      .insert(heartbeatsTable)
-      .values({ id, agent: ctx.agentName, startedAt, logPath })
-      .run();
+    // New heartbeat row + agent state flip are written atomically so the
+    // scheduler never sees a half-baked state where the row exists but the
+    // agent is still "idle".
+    ctx.db.transaction((tx) => {
+      tx.insert(heartbeatsTable)
+        .values({ id, agent: ctx.agentName, startedAt, logPath })
+        .run();
+      tx.update(agentState)
+        .set({ status: 'working', lastHeartbeat: Date.now() })
+        .where(eq(agentState.name, ctx.agentName))
+        .run();
+    });
   }
-
-  ctx.db
-    .update(agentState)
-    .set({ status: 'working', lastHeartbeat: Date.now() })
-    .where(eq(agentState.name, ctx.agentName))
-    .run();
 
   ctx.currentHeartbeatId = id;
   ctx.tasksWorkedThisHeartbeat.clear();
@@ -68,37 +75,36 @@ export async function endHeartbeat(
   const endedAt = Date.now();
   const tokensUsed = input.tokens_used ?? 0;
 
-  ctx.db
-    .update(heartbeatsTable)
-    .set({
-      endedAt,
-      outcome: 'ok',
-      tokensUsed,
-      tasksWorked: JSON.stringify([...ctx.tasksWorkedThisHeartbeat]),
-    })
-    .where(eq(heartbeatsTable.id, id))
-    .run();
-
-  ctx.db
-    .update(agentState)
-    .set({ status: 'idle' })
-    .where(eq(agentState.name, ctx.agentName))
-    .run();
-
+  // Filesystem write lives outside the transaction — it's not reversible and
+  // the db writes themselves must be atomic with each other, not with IO.
   if (input.summary) {
     const progressDir = join(ctx.projectPath, '.hq', 'progress');
     await mkdir(progressDir, { recursive: true });
     await writeFile(join(progressDir, `${ctx.agentName}.md`), input.summary, 'utf-8');
   }
 
-  ctx.db
-    .insert(activityTable)
-    .values({
-      agent: ctx.agentName,
-      action: 'heartbeat.ended',
-      details: JSON.stringify({ tokens_used: tokensUsed }),
-    })
-    .run();
+  ctx.db.transaction((tx) => {
+    tx.update(heartbeatsTable)
+      .set({
+        endedAt,
+        outcome: 'ok',
+        tokensUsed,
+        tasksWorked: JSON.stringify([...ctx.tasksWorkedThisHeartbeat]),
+      })
+      .where(eq(heartbeatsTable.id, id))
+      .run();
+    tx.update(agentState)
+      .set({ status: 'idle' })
+      .where(eq(agentState.name, ctx.agentName))
+      .run();
+    tx.insert(activityTable)
+      .values({
+        agent: ctx.agentName,
+        action: 'heartbeat.ended',
+        details: JSON.stringify({ tokens_used: tokensUsed }),
+      })
+      .run();
+  });
 
   ctx.bus.publish({
     type: 'agent.heartbeat_ended',

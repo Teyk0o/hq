@@ -73,7 +73,11 @@ export class Scheduler {
 
     // Separate reaper tick (every minute) for stale heartbeats.
     const reaper = new Cron('* * * * *', { paused: false }, async () => {
-      await reapStaleHeartbeats(db, cfg.heartbeat.default_timeout_minutes);
+      await reapStaleHeartbeats(
+        db,
+        cfg.heartbeat.default_timeout_minutes,
+        cfg.heartbeat.retry_max,
+      );
     });
     this.timers.push(reaper);
   }

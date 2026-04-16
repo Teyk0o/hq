@@ -17,5 +17,19 @@ export function openProjectDb(path: string): HQDatabase {
   sqlite.exec('PRAGMA foreign_keys = ON;');
   sqlite.exec('PRAGMA busy_timeout = 5000;');
   sqlite.exec(SCHEMA_DDL);
+  // Lightweight additive migrations for columns added after the initial
+  // schema ship. Each is wrapped to ignore "duplicate column" errors so
+  // running against a fresh DB is a no-op.
+  for (const stmt of ADDITIVE_ALTERS) {
+    try {
+      sqlite.exec(stmt);
+    } catch {
+      // column already exists — ignore
+    }
+  }
   return drizzle(sqlite, { schema });
 }
+
+const ADDITIVE_ALTERS = [
+  `ALTER TABLE heartbeats ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0`,
+];

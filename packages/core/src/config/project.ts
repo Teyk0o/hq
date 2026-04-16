@@ -88,7 +88,25 @@ export const ProjectConfigSchema = z.object({
       }),
     )
     .default([]),
-  rules: z.array(z.record(z.unknown())).default([]),
+  rules: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        /** Glob expression against the edited file path (e.g. "packages/installer/**"). */
+        match: z.string().optional(),
+        /** block: refuse the edit. warn: allow but surface a warning. */
+        action: z.enum(['block', 'warn']).optional(),
+        /** Only the named agent can modify files matching `match`. */
+        owner: z.string().optional(),
+        /** Shortcut for action=block on any of these paths (glob). */
+        protected_paths: z.array(z.string()).optional(),
+        /** Agents this rule applies to. "*" or empty = everyone. */
+        agents: z.array(z.string()).optional(),
+        /** Bash-only: forbid these substring/regex patterns in commands. */
+        forbid_commands: z.array(z.string()).optional(),
+      }),
+    )
+    .default([]),
 });
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;

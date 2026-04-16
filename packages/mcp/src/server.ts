@@ -6,6 +6,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
+  activity as activityTable,
   loadAgentConfig,
   loadProjectConfig,
   openProjectDb,
@@ -171,6 +172,46 @@ const tools: ToolSpec[] = [
 const toolByName = new Map(tools.map((t) => [t.name, t] as const));
 
 /**
+ * Write one audit row per MCP tool call. The details blob is the parsed input
+ * truncated to a reasonable size so a burst of activity doesn't blow up the
+ * DB. Errors are logged with their error code so timelines show the reason.
+ */
+function logAudit(
+  ctx: McpContext,
+  toolName: string,
+  input: unknown,
+  outcome: 'ok' | 'error',
+  errorCode?: string,
+): void {
+  try {
+    const taskId = extractTaskId(input);
+    const details = truncate(JSON.stringify({ input, outcome, errorCode }), 1024);
+    ctx.db
+      .insert(activityTable)
+      .values({
+        agent: ctx.agentName,
+        action: `mcp.${toolName}${outcome === 'error' ? `.error` : ''}`,
+        ...(taskId ? { taskId } : {}),
+        details,
+      })
+      .run();
+  } catch {
+    // Audit must never break a tool call.
+  }
+}
+
+function extractTaskId(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+  const o = input as Record<string, unknown>;
+  const id = o.id ?? o.task_id;
+  return typeof id === 'string' ? id : null;
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+/**
  * Wrap any tool outcome in a uniform JSON envelope so agents can branch on
  * `ok` without having to parse free-form error strings.
  */
@@ -245,6 +286,7 @@ export async function startMcpServer(options: StartServerOptions): Promise<void>
 
     try {
       const result = await tool.handler(ctx, parsed);
+      logAudit(ctx, tool.name, parsed, 'ok');
       return toolResult({ ok: true, data: result });
     } catch (err) {
       const structured =
@@ -255,6 +297,7 @@ export async function startMcpServer(options: StartServerOptions): Promise<void>
               ...(err.details ? { details: err.details } : {}),
             }
           : { code: 'internal_error', message: (err as Error).message };
+      logAudit(ctx, tool.name, parsed, 'error', structured.code);
       return toolResult({ ok: false, error: structured });
     }
   });

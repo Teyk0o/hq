@@ -18,6 +18,11 @@ export async function writeClaudeSettings(
   const settingsDir = join(worktreePath, '.claude');
   await mkdir(settingsDir, { recursive: true });
 
+  // Two gates on PreToolUse:
+  //  - bash-gate: whitelists Bash commands
+  //  - rules-gate: evaluates [[rules]] against Edit/Write/MultiEdit/NotebookEdit
+  const qp = shellQuote(projectPath);
+  const qa = shellQuote(agentName);
   const settings = {
     hooks: {
       PreToolUse: [
@@ -26,7 +31,16 @@ export async function writeClaudeSettings(
           hooks: [
             {
               type: 'command',
-              command: `hq bash-gate --project ${shellQuote(projectPath)} --agent ${shellQuote(agentName)}`,
+              command: `hq bash-gate --project ${qp} --agent ${qa}`,
+            },
+          ],
+        },
+        {
+          matcher: 'Edit|Write|MultiEdit|NotebookEdit',
+          hooks: [
+            {
+              type: 'command',
+              command: `hq rules-gate --project ${qp} --agent ${qa}`,
             },
           ],
         },
