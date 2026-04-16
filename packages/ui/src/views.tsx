@@ -740,6 +740,26 @@ export const ActivityFeed: FC<{
   );
 };
 
+const MetricStat: FC<{ label: string; value: string | number }> = ({ label, value }) => (
+  <div>
+    <div class="text-[15px] font-semibold mono">{value}</div>
+    <div class="text-[10px] text-faint uppercase tracking-wider">{label}</div>
+  </div>
+);
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+export interface AgentMetrics {
+  tasks_shipped_today: number;
+  heartbeats_today: number;
+  tokens_today: number;
+  last_heartbeats: Array<{ id: string; started_at: number; outcome: string | null }>;
+}
+
 export const AgentsList: FC<{
   agents: Array<{
     name: string;
@@ -749,6 +769,7 @@ export const AgentsList: FC<{
     current_task_id: string | null;
     tokens_today: number;
     tokens_budget: number;
+    metrics?: AgentMetrics;
   }>;
   project: string;
   showArchived: boolean;
@@ -810,6 +831,42 @@ export const AgentsList: FC<{
               Working on <span class="mono">{a.current_task_id.slice(0, 6)}</span>
             </div>
           )}
+          {a.metrics && (
+            <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+              <MetricStat label="Shipped" value={a.metrics.tasks_shipped_today} />
+              <MetricStat label="Beats" value={a.metrics.heartbeats_today} />
+              <MetricStat
+                label="Tokens"
+                value={formatTokens(a.metrics.tokens_today)}
+              />
+            </div>
+          )}
+          {a.metrics && a.metrics.last_heartbeats.length > 0 && (
+            <div class="mt-3">
+              <div class="text-[11px] text-faint mb-1.5">Recent heartbeats</div>
+              <div class="flex gap-1">
+                {a.metrics.last_heartbeats.slice(0, 12).map((hb) => {
+                  const color =
+                    hb.outcome === 'ok'
+                      ? 'var(--success)'
+                      : hb.outcome
+                        ? 'var(--danger)'
+                        : 'var(--warn)';
+                  return (
+                    <a
+                      href="#"
+                      hx-get={`/heartbeats/${hb.id}?project=${project}`}
+                      hx-target="#drawer"
+                      hx-swap="innerHTML"
+                      title={`${new Date(hb.started_at).toLocaleString()} · ${hb.outcome ?? 'running'}`}
+                      class="flex-1 rounded-sm transition-opacity hover:opacity-70"
+                      style={`background:${color}; height: 18px; min-width: 6px; cursor: pointer;`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {a.tokens_budget > 0 && (
             <div class="mt-4">
               <div class="flex justify-between text-[12px] text-faint mb-1.5">
@@ -824,7 +881,17 @@ export const AgentsList: FC<{
               </div>
             </div>
           )}
-          <div class="mt-4 flex items-center gap-2 border-t border-soft pt-3">
+          <div class="mt-4 flex items-center gap-2 border-t border-soft pt-3 flex-wrap">
+            <button
+              class="btn btn-sm"
+              hx-get={`/agents/${a.name}/last-log?project=${project}`}
+              hx-target="#drawer"
+              hx-swap="innerHTML"
+              title="Open last heartbeat log"
+            >
+              <i data-lucide="terminal"></i>
+              Logs
+            </button>
             {a.status !== 'archived' && a.status !== 'paused' && (
               <button
                 class="btn btn-sm"
@@ -874,6 +941,241 @@ export const AgentsList: FC<{
     </div>
   </div>
 );
+
+export interface MetricsData {
+  throughput7d: Array<{ day: string; shipped: number; created: number }>;
+  tokens_total_7d: number;
+  heartbeats_7d: number;
+  top_agents_shipped: Array<{ name: string; n: number; gender?: GenderHint }>;
+  tasks_by_status: Record<string, number>;
+}
+
+export const MetricsPage: FC<{ data: MetricsData; agents: AgentPresentation[] }> = ({
+  data,
+  agents,
+}) => {
+  const maxBar = Math.max(
+    1,
+    ...data.throughput7d.map((d) => Math.max(d.shipped, d.created)),
+  );
+  const totalShipped = data.throughput7d.reduce((s, d) => s + d.shipped, 0);
+  const totalCreated = data.throughput7d.reduce((s, d) => s + d.created, 0);
+  return (
+    <div class="max-w-5xl grid gap-5">
+      <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+        <SummaryCard icon="check-check" label="Shipped (7d)" value={String(totalShipped)} />
+        <SummaryCard icon="plus-circle" label="Created (7d)" value={String(totalCreated)} />
+        <SummaryCard
+          icon="activity"
+          label="Heartbeats (7d)"
+          value={String(data.heartbeats_7d)}
+        />
+        <SummaryCard
+          icon="zap"
+          label="Tokens (7d)"
+          value={formatTokens(data.tokens_total_7d)}
+        />
+      </div>
+
+      <section class="card p-5">
+        <h2 class="text-[14px] font-semibold mb-4 flex items-center gap-2">
+          <i data-lucide="bar-chart-2"></i> Throughput — last 7 days
+        </h2>
+        <div class="grid gap-3" style="grid-template-columns: repeat(7, 1fr)">
+          {data.throughput7d.map((d) => (
+            <div class="flex flex-col items-center gap-1">
+              <div class="flex-1 w-full flex items-end gap-1" style="height:120px">
+                <div
+                  class="flex-1 rounded-t"
+                  style={`height: ${(d.shipped / maxBar) * 100}%; background: var(--success)`}
+                  title={`Shipped: ${d.shipped}`}
+                />
+                <div
+                  class="flex-1 rounded-t"
+                  style={`height: ${(d.created / maxBar) * 100}%; background: var(--accent)`}
+                  title={`Created: ${d.created}`}
+                />
+              </div>
+              <div class="text-[11px] text-faint mono">{d.day}</div>
+            </div>
+          ))}
+        </div>
+        <div class="mt-3 flex items-center gap-4 text-[12px] text-muted">
+          <span class="inline-flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded" style="background: var(--success)" /> Shipped
+          </span>
+          <span class="inline-flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded" style="background: var(--accent)" /> Created
+          </span>
+        </div>
+      </section>
+
+      <section class="grid gap-4 md:grid-cols-2">
+        <div class="card p-5">
+          <h2 class="text-[14px] font-semibold mb-3 flex items-center gap-2">
+            <i data-lucide="trophy"></i> Top agents (shipped, 7d)
+          </h2>
+          {data.top_agents_shipped.length === 0 ? (
+            <p class="text-[13px] text-faint italic">No shipped tasks yet.</p>
+          ) : (
+            <ul class="space-y-2">
+              {data.top_agents_shipped.map((a, i) => (
+                <li class="flex items-center gap-3">
+                  <span class="text-[12px] text-faint mono w-5">#{i + 1}</span>
+                  <Avatar agent={agentFor(agents, a.name)} size={26} />
+                  <span class="flex-1 font-medium text-[14px]">{a.name}</span>
+                  <span class="mono text-[14px] font-semibold">{a.n}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div class="card p-5">
+          <h2 class="text-[14px] font-semibold mb-3 flex items-center gap-2">
+            <i data-lucide="layout-grid"></i> Current pipeline
+          </h2>
+          <ul class="space-y-2">
+            {Object.entries(data.tasks_by_status).map(([status, n]) => (
+              <li class="flex items-center gap-3 text-[13px]">
+                <span class="flex-1 capitalize">{status.replace(/_/g, ' ')}</span>
+                <span class="mono text-muted">{n}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const SummaryCard: FC<{ icon: string; label: string; value: string }> = ({
+  icon,
+  label,
+  value,
+}) => (
+  <div class="card p-4">
+    <div class="flex items-center gap-2 text-[12px] text-faint">
+      <i data-lucide={icon} class="icon-sm"></i>
+      {label}
+    </div>
+    <div class="mt-2 text-[26px] font-semibold mono">{value}</div>
+  </div>
+);
+
+export const HeartbeatReplay: FC<{
+  heartbeat: {
+    id: string;
+    agent: string;
+    started_at: number;
+    ended_at: number | null;
+    outcome: string | null;
+    tokens_used: number;
+    log_path: string;
+  };
+  activity: Array<{ action: string; task_id: string | null; details: string; created_at: number }>;
+  log: string;
+  agents: AgentPresentation[];
+}> = ({ heartbeat, activity, log, agents }) => {
+  const durationSec =
+    heartbeat.ended_at !== null
+      ? Math.round((heartbeat.ended_at - heartbeat.started_at) / 1000)
+      : null;
+  const outcomeColor =
+    heartbeat.outcome === 'ok'
+      ? 'var(--success)'
+      : heartbeat.outcome
+        ? 'var(--danger)'
+        : 'var(--warn)';
+  return (
+    <div
+      class="drawer fixed right-0 top-0 h-full w-[600px] border-l border-soft overflow-y-auto z-30"
+      style="background: var(--surface); box-shadow: -8px 0 32px rgba(31,30,26,0.06)"
+    >
+      <div
+        class="sticky top-0 border-b border-soft px-7 py-4 flex items-center justify-between z-10"
+        style="background: var(--surface)"
+      >
+        <div class="flex items-center gap-2">
+          <Avatar agent={agentFor(agents, heartbeat.agent)} size={24} />
+          <span class="font-semibold text-[14px]">{heartbeat.agent}</span>
+          <span class="mono text-[11px] text-faint">{heartbeat.id.slice(0, 8)}</span>
+        </div>
+        <button class="btn btn-sm" hx-get="/drawer/empty" hx-target="#drawer">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="px-7 py-5">
+        <div class="flex items-center gap-3 text-[13px] flex-wrap">
+          <span
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium"
+            style={`color:${outcomeColor}; background: color-mix(in srgb, ${outcomeColor} 18%, transparent)`}
+          >
+            <span class="w-1.5 h-1.5 rounded-full" style={`background:${outcomeColor}`} />
+            {heartbeat.outcome ?? 'running'}
+          </span>
+          <span class="text-muted inline-flex items-center gap-1.5">
+            <i data-lucide="clock" class="icon-sm"></i>
+            {new Date(heartbeat.started_at).toLocaleString()}
+          </span>
+          {durationSec !== null && (
+            <span class="text-muted mono">{durationSec}s</span>
+          )}
+          <span class="text-muted mono">{heartbeat.tokens_used.toLocaleString()} tokens</span>
+        </div>
+
+        <section class="mt-7">
+          <h3 class="text-[12px] font-semibold uppercase tracking-wider text-faint mb-3 flex items-center gap-1.5">
+            <i data-lucide="list-ordered" class="icon-sm"></i>
+            Tool calls · <span class="mono">{activity.length}</span>
+          </h3>
+          {activity.length === 0 ? (
+            <p class="text-[13px] text-faint italic">
+              No MCP activity recorded for this heartbeat yet.
+            </p>
+          ) : (
+            <ul class="space-y-1.5">
+              {activity.map((a) => (
+                <li class="card px-3 py-2">
+                  <div class="flex items-center gap-2 text-[13px]">
+                    <span class="mono text-faint">
+                      {new Date(a.created_at).toLocaleTimeString()}
+                    </span>
+                    <span class="font-medium">{a.action}</span>
+                    {a.task_id && (
+                      <span class="ml-auto text-[11px] text-faint mono">
+                        {a.task_id.slice(0, 6)}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section class="mt-7">
+          <h3 class="text-[12px] font-semibold uppercase tracking-wider text-faint mb-3 flex items-center gap-1.5">
+            <i data-lucide="terminal" class="icon-sm"></i>
+            Terminal log
+          </h3>
+          {log ? (
+            <pre
+              class="card p-3 text-[12px] mono whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto"
+              style="background: var(--surface-alt)"
+            >
+              {log}
+            </pre>
+          ) : (
+            <p class="text-[13px] text-faint italic">
+              Log file not found or empty ({heartbeat.log_path}).
+            </p>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+};
 
 export interface ProjectSummary {
   name: string;

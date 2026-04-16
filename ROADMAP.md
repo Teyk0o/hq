@@ -51,18 +51,18 @@
 - [x] **27. Archived agents filter** — une fois archivé, introuvable dans l'UI. *(toggle ?archived=1 sur /agents + bouton Archive/Restore par card)*
 - [x] **28. Vue multi-projets** (`/board/all`) — mentionnée DESIGN, pas codée. *(grid de project summary cards avec counts + agents stack + shortcut sidebar)*
 - [x] **29. Settings page** — voir la config compilée, éditer les seuils. *(read-only, sections Project/Scheduler/Heartbeat/Kanban/Sandbox/Rules&Goals, path hint vers project.toml)*
-- [ ] **30. Dashboard metrics** (throughput, tokens/projet/semaine, velocity).
+- [x] **30. Dashboard metrics** (throughput, tokens/projet/semaine, velocity). *(/metrics: 7d throughput bar chart, tokens/heartbeats totals, top agents shipped, pipeline by status)*
 - [x] **31. Loading skeletons** au lieu de "loading…". *(CSS .skel shimmer pour usage widget + sidebar team + anywhere)*
 - [x] **32. Error toasts** quand une action HTMX foire.
 - [x] **33. Inbox messages inter-agents** — `send_message` marche côté MCP, pas de vue UI.
 
 ### Observabilité
 
-- [ ] **34. Logs viewer UI** — les logs tmux sont sur disque, pas de UI pour tail/search.
-- [ ] **35. Daemon health endpoint** — est-ce qu'il tourne ? dernier tick ?
-- [ ] **36. Métriques agents** — temps idle/working par jour, tokens utilisés.
-- [ ] **37. Structured logging** — `console.log` partout, pas de niveaux.
-- [ ] **38. Replay d'un heartbeat** — revoir ce qu'un agent a fait il y a 2h.
+- [x] **34. Logs viewer UI** — les logs tmux sont sur disque, pas de UI pour tail/search. *(bouton Logs sur card agent ouvre le dernier heartbeat, log ANSI-stripped dans le drawer)*
+- [x] **35. Daemon health endpoint** — est-ce qu'il tourne ? dernier tick ?  *(/api/health JSON + /health/widget HTML dans sidebar, refresh 30s)*
+- [x] **36. Métriques agents** — temps idle/working par jour, tokens utilisés. *(shipped/beats/tokens today + swatches des 12 derniers heartbeats cliquables)*
+- [x] **37. Structured logging** — `console.log` partout, pas de niveaux. *(@hq/core createLogger avec levels debug/info/warn/error, scoping child, HQ_LOG_LEVEL + HQ_LOG_FORMAT=json)*
+- [x] **38. Replay d'un heartbeat** — revoir ce qu'un agent a fait il y a 2h. *(/heartbeats/:id drawer : metadata + activity timeline + log ANSI-stripped)*
 
 ### Notifications
 
@@ -185,7 +185,7 @@ utilisateur, tests unitaires, CI GitHub Actions.
 - **40. Browser Notification API** — ask permission une fois, push une
   notif système pour les events critiques (review, blocked).
 
-### ⏳ Sprint H — Observability (6 items)
+### ✅ Sprint H — Observability (6 items)
 
 > Objectif : quand un agent déconne, on sait pourquoi en 10 secondes.
 
