@@ -1,11 +1,12 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { loadGlobalConfig } from '@hq/core';
+import { loadGlobalConfig, loadProjectConfig } from '@hq/core';
 import {
   QuotaPoller,
   Scheduler,
   installEventTriggers,
+  installProjectWebhooks,
   reapOrphanedTmuxSessions,
 } from '@hq/daemon';
 import { getSharedBus } from '@hq/mcp';
@@ -58,6 +59,18 @@ export async function daemonStart(): Promise<void> {
   // Event-driven: wake an idle reviewer the moment a task hits peer_review,
   // instead of waiting for the next scheduler tick.
   installEventTriggers(bus, projects);
+
+  // Discord webhooks: post an embed on every configured event type per project.
+  const webhookConfigs: Array<{ name: string; config: Awaited<ReturnType<typeof loadProjectConfig>> }> = [];
+  for (const p of projects) {
+    try {
+      const cfg = await loadProjectConfig(join(p.path, '.hq', 'project.toml'));
+      webhookConfigs.push({ name: p.name, config: cfg });
+    } catch {
+      // skip — project already logged elsewhere if broken
+    }
+  }
+  installProjectWebhooks(bus, webhookConfigs);
 
   const projectMap = Object.fromEntries(projects.map((p) => [p.name, p.path]));
   await startUi({

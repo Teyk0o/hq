@@ -6,6 +6,7 @@ export { writeClaudeSettings } from './claude-settings';
 export { preApproveTrust } from './trust';
 export { reapOrphanedTmuxSessions } from './reaper';
 export { installEventTriggers } from './triggers';
+export { installDiscordWebhook, installProjectWebhooks } from './webhooks';
 export { buildHeartbeatPrompt } from './heartbeat';
 export { Scheduler, type ProjectEntry, type SchedulerOptions } from './scheduler';
 export { QuotaPoller, type QuotaListener } from './quota';

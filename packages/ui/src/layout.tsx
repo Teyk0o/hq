@@ -155,6 +155,30 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           [data-lucide] { width: 18px; height: 18px; stroke-width: 2; flex-shrink: 0; }
           .icon-sm [data-lucide], [data-lucide].icon-sm { width: 15px; height: 15px; }
           .icon-lg [data-lucide], [data-lucide].icon-lg { width: 24px; height: 24px; }
+
+          /* Mobile responsive: collapse sidebar, drawer becomes full-width,
+             header padding tightens. The sidebar is hidden behind a toggle
+             that slides it in from the left. */
+          .sidebar-toggle { display: none; }
+          @media (max-width: 900px) {
+            .sidebar-toggle {
+              display: inline-flex; align-items: center; justify-content: center;
+              height: 38px; width: 38px; border-radius: 10px; border: 1px solid var(--border);
+              background: var(--surface); cursor: pointer;
+            }
+            aside.hq-sidebar {
+              position: fixed; inset: 0 auto 0 0; z-index: 40;
+              transform: translateX(-100%); transition: transform 180ms ease-out;
+            }
+            body.sidebar-open aside.hq-sidebar { transform: translateX(0); }
+            body.sidebar-open::after {
+              content: ''; position: fixed; inset: 0; background: rgba(31,30,26,0.35); z-index: 35;
+            }
+            main.hq-main > header { padding: 16px 20px; }
+            main.hq-main > div { padding: 18px 20px 24px; }
+            main.hq-main h1 { font-size: 22px; }
+            .drawer { width: 100vw !important; }
+          }
         `,
         }}
       />
@@ -177,6 +201,9 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
             c.appendChild(t);
             if (window.lucide) window.lucide.createIcons({ root: t });
             setTimeout(() => { t.style.transition = 'opacity 300ms'; t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4500);
+          }
+          function hqToggleSidebar(){
+            document.body.classList.toggle('sidebar-open');
           }
           function hqInit(){
             if (window.lucide) window.lucide.createIcons();
@@ -219,7 +246,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
     >
       <div class="flex h-screen">
         {/* Sidebar */}
-        <aside class="w-[280px] shrink-0 border-r border-soft flex flex-col h-screen" style="background: var(--surface-alt)">
+        <aside class="hq-sidebar w-[280px] shrink-0 border-r border-soft flex flex-col h-screen" style="background: var(--surface-alt)">
           <div class="p-5 flex-1 overflow-y-auto">
             <div class="flex items-center gap-2.5 px-1">
               <div
@@ -284,20 +311,30 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         </aside>
 
         {/* Main */}
-        <main class="flex-1 min-w-0 flex flex-col h-screen">
-          <header class="px-10 py-6 flex items-center justify-between border-b border-soft shrink-0" style="background: var(--bg)">
-            <div>
+        <main class="hq-main flex-1 min-w-0 flex flex-col h-screen">
+          <header class="px-10 py-6 flex items-center justify-between border-b border-soft shrink-0 gap-3" style="background: var(--bg)">
+            <div class="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                class="sidebar-toggle"
+                onclick="hqToggleSidebar()"
+                aria-label="Open menu"
+              >
+                <i data-lucide="menu"></i>
+              </button>
+              <div class="min-w-0">
               <h1 class="text-[28px] font-semibold leading-tight">{title}</h1>
               {project && (
-                <p class="text-[13px] text-faint mt-1.5 mono flex items-center gap-1.5">
+                <p class="text-[13px] text-faint mt-1.5 mono flex items-center gap-1.5 truncate">
                   <i data-lucide="folder" class="icon-sm"></i>
                   {project}
                 </p>
               )}
+              </div>
             </div>
             <div
               id="usage-widget"
-              class="flex items-center gap-2"
+              class="flex items-center gap-2 flex-wrap justify-end"
               hx-get="/usage/widget"
               hx-trigger="load, sse:claude.usage_updated from:body"
               hx-swap="innerHTML"

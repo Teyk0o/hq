@@ -66,7 +66,7 @@
 
 ### Notifications
 
-- [ ] **39. Discord webhook** — code écrit, jamais testé.
+- [x] **39. Discord webhook** — code écrit, jamais testé. *(bus subscriber POST embed Discord pour chaque event configuré dans project.toml, fire-and-forget)*
 - [ ] **40. Browser Notification API** — toast only pour l'instant.
 - [ ] **41. Digest quotidien** — résumé de la journée d'agents.
 
@@ -92,21 +92,21 @@
 - [ ] **51. Packaging binaire** (`bun build --compile`) pour distribution sans node_modules.
 - [ ] **52. Backup auto** de `~/.hq/registry.sqlite` + project DBs.
 - [ ] **53. Migration path** entre versions HQ (schema DB qui évolue).
-- [ ] **54. Mobile-friendly UI** — sidebar collapse sur petit écran.
+- [x] **54. Mobile-friendly UI** — sidebar collapse sur petit écran. *(media query <900px : sidebar devient overlay slidable via bouton menu, drawer en pleine largeur, header tightened)*
 
 ### Documentation
 
-- [ ] **55. README utilisateur** — actuellement scaffold-level.
-- [ ] **56. Guide d'onboarding projet** — comment créer un SOUL.md efficace.
-- [ ] **57. Exemples de templates SOUL.md** — boss, worker, reviewer, devil's advocate.
-- [ ] **58. Troubleshooting** — erreurs courantes (bwrap userns, tmux, mcp.json).
+- [x] **55. README utilisateur** — actuellement scaffold-level.
+- [x] **56. Guide d'onboarding projet** — comment créer un SOUL.md efficace. *(docs/SOUL-templates.md)*
+- [x] **57. Exemples de templates SOUL.md** — boss, worker, reviewer, devil's advocate. *(docs/SOUL-templates.md)*
+- [x] **58. Troubleshooting** — erreurs courantes (bwrap userns, tmux, mcp.json). *(section dans README.md)*
 - [ ] **59. DESIGN.md public** avec captures d'écran.
 
 ### Tests
 
-- [ ] **60. 0 test automatisé aujourd'hui** — au minimum : state machine, rules engine, TOML parsers.
-- [ ] **61. Smoke test scripté** — `hq debug test` est manuel.
-- [ ] **62. CI GitHub Actions** — typecheck + tests.
+- [x] **60. 0 test automatisé aujourd'hui** — au minimum : state machine, rules engine, TOML parsers. *(39 tests bun:test sur domain, rules, config, avatar)*
+- [x] **61. Smoke test scripté** — `hq debug test` est manuel. *(hq debug test --reset joue scenario complet)*
+- [x] **62. CI GitHub Actions** — typecheck + tests. *(.github/workflows/ci.yml : pnpm install + typecheck + bun test)*
 - [ ] **63. Integration test** — spawn un projet dummy, lancer un agent fake, vérifier la DB.
 
 ### Perf
