@@ -313,7 +313,7 @@ export interface GitCommit {
 }
 
 export const TaskDrawer: FC<{
-  task: KanbanTask & { description?: string; branch?: string | null };
+  task: KanbanTask & { description?: string; branch?: string | null; pr_url?: string | null };
   comments: Array<{ author: string; body: string; created_at: number }>;
   reviews: Array<{ reviewer: string; verdict: string; body: string; created_at: number }>;
   commits: GitCommit[];
@@ -355,6 +355,18 @@ export const TaskDrawer: FC<{
               <i data-lucide="git-branch" class="icon-sm"></i>
               {task.branch}
             </span>
+          )}
+          {task.pr_url && (
+            <a
+              href={task.pr_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1.5 text-[12px]"
+              style="color: var(--accent)"
+            >
+              <i data-lucide="git-pull-request" class="icon-sm"></i>
+              Open PR
+            </a>
           )}
         </div>
 

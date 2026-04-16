@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   package TEXT,
   branch TEXT,
   pushed INTEGER NOT NULL DEFAULT 0,
+  pr_url TEXT,
   blocked_reason TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
