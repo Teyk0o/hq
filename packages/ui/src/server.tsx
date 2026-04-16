@@ -1,19 +1,24 @@
 /** @jsxImportSource hono/jsx */
 import { Database } from 'bun:sqlite';
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { AgentConfigSchema, loadProjectConfig, newId, type HQEvent } from '@hq/core';
+import { lastTickAtMap } from '@hq/daemon';
 import { getSharedBus } from '@hq/mcp';
+
+const DAEMON_STARTED_AT = Date.now();
 import { parse as parseToml } from 'smol-toml';
 import {
   ActivityFeed,
   AgentsList,
   BoardHeader,
   GoalsPage,
+  HeartbeatReplay,
   Inbox,
+  MetricsPage,
   MultiProjectView,
   Kanban,
   SettingsPage,
@@ -289,6 +294,91 @@ export function createApp(options: UiServerOptions): Hono {
 
   app.get('/drawer/empty', (c) => c.html(<></>));
 
+  /**
+   * Latest log viewer per agent: opens the drawer on the most recent
+   * heartbeat row for that agent. If there is none, returns a polite empty.
+   */
+  app.get('/agents/:name/last-log', async (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const hb = db
+      .prepare(
+        `SELECT id FROM heartbeats WHERE agent = ? ORDER BY started_at DESC LIMIT 1`,
+      )
+      .get(name) as { id: string } | undefined;
+    db.close();
+    if (!hb) {
+      return c.html(
+        <aside class="drawer fixed right-0 top-0 h-full w-[420px] border-l border-soft p-6" style="background: var(--surface)">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold">{name}</span>
+            <button class="btn btn-sm" hx-get="/drawer/empty" hx-target="#drawer">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+          <p class="text-[13px] text-faint italic mt-4">No heartbeat recorded yet.</p>
+        </aside>,
+      );
+    }
+    return c.redirect(`/heartbeats/${hb.id}?project=${project}`);
+  });
+
+  /**
+   * Heartbeat replay drawer — surfaces the activity timeline for a given
+   * heartbeat id plus the raw tmux log file it captured, so the operator can
+   * see what the agent did (MCP calls), what it saw (terminal output), and
+   * how long it took.
+   */
+  app.get('/heartbeats/:id', async (c) => {
+    const id = c.req.param('id');
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const hb = db.prepare('SELECT * FROM heartbeats WHERE id = ?').get(id) as
+      | {
+          id: string;
+          agent: string;
+          started_at: number;
+          ended_at: number | null;
+          outcome: string | null;
+          tokens_used: number;
+          log_path: string;
+        }
+      | undefined;
+    if (!hb) {
+      db.close();
+      return c.notFound();
+    }
+    const endedAt = hb.ended_at ?? Date.now();
+    const activity = db
+      .prepare(
+        `SELECT action, task_id, details, created_at FROM activity
+         WHERE agent = ? AND created_at BETWEEN ? AND ?
+         ORDER BY created_at`,
+      )
+      .all(hb.agent, hb.started_at, endedAt) as Array<{
+      action: string;
+      task_id: string | null;
+      details: string;
+      created_at: number;
+    }>;
+    db.close();
+
+    let logText = '';
+    if (existsSync(hb.log_path)) {
+      try {
+        const raw = await readFile(hb.log_path, 'utf-8');
+        logText = stripAnsi(raw).slice(-12_000);
+      } catch {
+        logText = '';
+      }
+    }
+    const agents = await loadAgentPresentations(project);
+    return c.html(
+      <HeartbeatReplay heartbeat={hb} activity={activity} log={logText} agents={agents} />,
+    );
+  });
+
   app.get('/activity', async (c) => {
     const project = currentProject(c.req.raw);
     const db = openDb(project);
@@ -335,10 +425,41 @@ export function createApp(options: UiServerOptions): Hono {
     db.close();
     const presentations = await loadAgentPresentations(project);
     const genderByName = new Map(presentations.map((p) => [p.name, p.gender]));
+
+    // Gather per-agent metrics for the last 24h: tasks shipped (transitioned
+    // to done with this agent as assignee), heartbeat count, tokens used,
+    // and the last ~12 heartbeats as outcome swatches.
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const db2 = openDb(project);
     const merged = states.map((s) => {
+      const shipped = db2
+        .prepare(
+          `SELECT COUNT(*) AS n FROM tasks WHERE assignee = ? AND status = 'done' AND completed_at >= ?`,
+        )
+        .get(s.name, dayAgo) as { n: number };
+      const hbCount = db2
+        .prepare(
+          `SELECT COUNT(*) AS n, COALESCE(SUM(tokens_used), 0) AS t FROM heartbeats WHERE agent = ? AND started_at >= ?`,
+        )
+        .get(s.name, dayAgo) as { n: number; t: number };
+      const recent = db2
+        .prepare(
+          `SELECT id, started_at, outcome FROM heartbeats WHERE agent = ? ORDER BY started_at DESC LIMIT 12`,
+        )
+        .all(s.name) as Array<{ id: string; started_at: number; outcome: string | null }>;
       const gender = genderByName.get(s.name);
-      return gender ? { ...s, gender: gender as GenderHint } : s;
+      return {
+        ...s,
+        ...(gender ? { gender: gender as GenderHint } : {}),
+        metrics: {
+          tasks_shipped_today: shipped.n,
+          heartbeats_today: hbCount.n,
+          tokens_today: hbCount.t,
+          last_heartbeats: recent,
+        },
+      };
     });
+    db2.close();
     const url2 = new URL(c.req.raw.url);
     const qs = new URLSearchParams();
     qs.set('project', project);
@@ -546,6 +667,69 @@ export function createApp(options: UiServerOptions): Hono {
     db.close();
     bus.publish({ type: 'goal.updated', goal_id: id });
     return c.html(await goalsFragment(project));
+  });
+
+  app.get('/metrics', async (c) => {
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    // 7-day throughput: completed_at for shipped, created_at for created.
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const throughput7d: Array<{ day: string; shipped: number; created: number }> = [];
+    for (let i = 6; i >= 0; i--) {
+      const start = now - (i + 1) * dayMs;
+      const end = now - i * dayMs;
+      const shipped = (db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM tasks WHERE status = 'done' AND completed_at BETWEEN ? AND ?`,
+        )
+        .get(start, end) as { n: number }).n;
+      const created = (db
+        .prepare(`SELECT COUNT(*) AS n FROM tasks WHERE created_at BETWEEN ? AND ?`)
+        .get(start, end) as { n: number }).n;
+      const date = new Date(end - 1).toLocaleDateString(undefined, { weekday: 'short' });
+      throughput7d.push({ day: date, shipped, created });
+    }
+    const weekAgo = now - 7 * dayMs;
+    const tokens_total_7d = (db
+      .prepare(`SELECT COALESCE(SUM(tokens_used), 0) AS t FROM heartbeats WHERE started_at >= ?`)
+      .get(weekAgo) as { t: number }).t;
+    const heartbeats_7d = (db
+      .prepare(`SELECT COUNT(*) AS n FROM heartbeats WHERE started_at >= ?`)
+      .get(weekAgo) as { n: number }).n;
+    const top_agents = db
+      .prepare(
+        `SELECT assignee AS name, COUNT(*) AS n FROM tasks
+           WHERE status = 'done' AND completed_at >= ? AND assignee IS NOT NULL
+           GROUP BY assignee ORDER BY n DESC LIMIT 5`,
+      )
+      .all(weekAgo) as Array<{ name: string; n: number }>;
+    const tasks_by_status_rows = db
+      .prepare(`SELECT status, COUNT(*) AS n FROM tasks GROUP BY status`)
+      .all() as Array<{ status: string; n: number }>;
+    db.close();
+    const agents = await loadAgentPresentations(project);
+    const genderByName = new Map(agents.map((a) => [a.name, a.gender]));
+    const top_with_gender = top_agents.map((t) => {
+      const g = genderByName.get(t.name);
+      return g ? { ...t, gender: g } : t;
+    });
+    const tasks_by_status: Record<string, number> = {};
+    for (const r of tasks_by_status_rows) tasks_by_status[r.status] = r.n;
+    return c.html(
+      <Layout project={project} projects={projectNames} title="Metrics" page="board">
+        <MetricsPage
+          data={{
+            throughput7d,
+            tokens_total_7d,
+            heartbeats_7d,
+            top_agents_shipped: top_with_gender,
+            tasks_by_status,
+          }}
+          agents={agents}
+        />
+      </Layout>,
+    );
   });
 
   app.get('/settings', async (c) => {
@@ -950,6 +1134,61 @@ export function createApp(options: UiServerOptions): Hono {
     return c.body(null, 204);
   });
 
+  /**
+   * Lightweight health check for the sidebar widget. Aggregates the
+   * scheduler's per-project last-tick timestamps. A project whose last tick
+   * is > 2 * interval_minutes ago is flagged 'stale' — a useful canary for
+   * a silently-wedged cron.
+   */
+  app.get('/api/health', async (c) => {
+    const ticks = lastTickAtMap();
+    const now = Date.now();
+    const perProject: Array<{ name: string; last_tick_ms_ago: number | null; stale: boolean }> = [];
+    for (const name of projectNames) {
+      const t = ticks.get(name);
+      let stale = false;
+      if (t) {
+        try {
+          const cfg = await loadProjectConfig(join(options.projects[name]!, '.hq', 'project.toml'));
+          stale = now - t > cfg.scheduler.interval_minutes * 60_000 * 2;
+        } catch {
+          // unreadable config counts as stale
+          stale = true;
+        }
+      }
+      perProject.push({ name, last_tick_ms_ago: t ? now - t : null, stale });
+    }
+    return c.json({
+      ok: perProject.every((p) => !p.stale),
+      uptime_ms: now - DAEMON_STARTED_AT,
+      projects: perProject,
+    });
+  });
+
+  app.get('/health/widget', async (c) => {
+    const ticks = lastTickAtMap();
+    const now = Date.now();
+    // Use the freshest tick across projects as the "daemon heartbeat".
+    let latest: number | null = null;
+    for (const t of ticks.values()) {
+      if (latest === null || t > latest) latest = t;
+    }
+    const uptimeMin = Math.floor((now - DAEMON_STARTED_AT) / 60_000);
+    const ago = latest !== null ? Math.max(0, Math.floor((now - latest) / 1000)) : null;
+    const color =
+      ago === null ? 'var(--ink-faint)' : ago < 120 ? 'var(--success)' : 'var(--warn)';
+    const label =
+      ago === null
+        ? `daemon up ${uptimeMin}min · no tick yet`
+        : `daemon up ${uptimeMin}min · last tick ${ago < 60 ? ago + 's' : Math.floor(ago / 60) + 'min'} ago`;
+    return c.html(
+      <span class="inline-flex items-center gap-1.5 text-[11px] text-muted" title={label}>
+        <span class="w-1.5 h-1.5 rounded-full" style={`background:${color}`} />
+        {label}
+      </span>,
+    );
+  });
+
   app.post('/api/daemon/pause', (c) => {
     bus.publish({ type: 'daemon.quota_paused', week_all_pct: 0 });
     return c.body(null, 204);
@@ -978,6 +1217,14 @@ export async function startUi(options: UiServerOptions): Promise<void> {
       // non-fatal
     }
   })();
+}
+
+/** Strip ANSI escape codes from a captured tmux log before rendering it. */
+function stripAnsi(s: string): string {
+  return s
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+    .replace(/\x1b\][^\x07]*\x07/g, '')
+    .replace(/\x1b[=>]/g, '');
 }
 
 function extractMentions(body: string): string[] {

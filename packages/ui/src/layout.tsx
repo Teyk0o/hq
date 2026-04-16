@@ -343,6 +343,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
               />
               <NavItem href={`/activity?project=${project ?? ''}`} active={page === 'activity'} icon="activity" label="Activity" />
               <NavItem href={`/goals?project=${project ?? ''}`} active={page === 'goals'} icon="target" label="Goals" />
+              <NavItem href={`/metrics?project=${project ?? ''}`} active={false} icon="bar-chart-2" label="Metrics" />
               <NavItem href={`/settings?project=${project ?? ''}`} active={page === 'settings'} icon="settings" label="Settings" />
             </nav>
 
@@ -367,6 +368,15 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           </div>
 
           <div class="p-5 border-t border-soft flex flex-col gap-2">
+            <div
+              id="health-widget"
+              class="px-1 pb-1"
+              hx-get="/health/widget"
+              hx-trigger="load, every 30s"
+              hx-swap="innerHTML"
+            >
+              <span class="skel" style="width:100%; height:14px; display:block" />
+            </div>
             <button
               id="notify-toggle"
               type="button"
