@@ -5,6 +5,7 @@ import { loadGlobalConfig, loadProjectConfig } from '@hq/core';
 import {
   QuotaPoller,
   Scheduler,
+  installDailyBackup,
   installEventTriggers,
   installProjectWebhooks,
   reapOrphanedTmuxSessions,
@@ -90,6 +91,9 @@ export async function daemonStart(): Promise<void> {
   }
   installProjectWebhooks(bus, webhookConfigs);
 
+  // Daily SQLite snapshots of registry + every project DB under ~/.hq/backups.
+  installDailyBackup({ projects });
+
   const projectMap = Object.fromEntries(projects.map((p) => [p.name, p.path]));
   await startUi({
     host: global.daemon.ui_host,
@@ -112,7 +116,19 @@ export async function daemonStart(): Promise<void> {
 
 export async function daemonInstallService(): Promise<void> {
   const unitPath = join(homedir(), '.config', 'systemd', 'user', 'hq.service');
-  const bin = join(homedir(), '.local', 'bin', 'hq');
+  // Resolve the hq binary path from the current PATH so the unit points at
+  // wherever bun link (or an eventual compiled binary) landed it, instead of
+  // hard-coding ~/.local/bin/hq which is only one of several plausible spots.
+  const { spawn } = await import('node:child_process');
+  const which = await new Promise<string>((resolve) => {
+    const proc = spawn('which', ['hq'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    proc.stdout.on('data', (d) => (out += d.toString()));
+    proc.on('close', () => resolve(out.trim()));
+    proc.on('error', () => resolve(''));
+  });
+  const bin = which || join(homedir(), '.local', 'bin', 'hq');
+
   const unit = `[Unit]
 Description=HQ agent orchestration daemon
 After=network.target
@@ -130,9 +146,39 @@ Environment=TERM=xterm-256color
 WantedBy=default.target
 `;
   await mkdir(join(homedir(), '.config', 'systemd', 'user'), { recursive: true });
+  await mkdir(join(homedir(), '.hq'), { recursive: true });
   await writeFile(unitPath, unit, 'utf-8');
   console.log(`✓ systemd unit written to ${unitPath}`);
-  console.log(`  Activate with:`);
-  console.log(`    systemctl --user daemon-reload`);
-  console.log(`    systemctl --user enable --now hq`);
+  console.log(`  ExecStart = ${bin} daemon start`);
+  console.log(`  Logs → ~/.hq/daemon.log`);
+  console.log('');
+  console.log('  Activate with:');
+  console.log('    systemctl --user daemon-reload');
+  console.log('    systemctl --user enable --now hq');
+  console.log('');
+  console.log('  Then check with:   hq daemon status');
+}
+
+export async function daemonStatus(): Promise<void> {
+  const { spawn } = await import('node:child_process');
+  const run = (args: string[]) =>
+    new Promise<{ code: number; out: string }>((resolve) => {
+      const proc = spawn('systemctl', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      let out = '';
+      proc.stdout.on('data', (d) => (out += d.toString()));
+      proc.stderr.on('data', (d) => (out += d.toString()));
+      proc.on('close', (code) => resolve({ code: code ?? 0, out }));
+      proc.on('error', () => resolve({ code: -1, out: 'systemctl not available' }));
+    });
+
+  const active = await run(['--user', 'is-active', 'hq']);
+  const enabled = await run(['--user', 'is-enabled', 'hq']);
+  const status = await run(['--user', '--no-pager', 'status', 'hq']);
+  console.log(`active:  ${active.out.trim()}`);
+  console.log(`enabled: ${enabled.out.trim()}`);
+  console.log('');
+  console.log(status.out);
+  if (active.code !== 0) {
+    console.log('  If not installed yet, run:   hq daemon install-service');
+  }
 }
