@@ -12,8 +12,11 @@ import {
   ActivityFeed,
   AgentsList,
   BoardHeader,
+  GoalsPage,
   Inbox,
+  MultiProjectView,
   Kanban,
+  SettingsPage,
   SidebarAgents,
   TaskCreateForm,
   TaskDrawer,
@@ -22,7 +25,9 @@ import {
   type Filters,
   type GenderHint,
   type GitCommit,
+  type GoalRow,
   type KanbanTask,
+  type ProjectSummary,
 } from './views';
 import { Layout } from './layout';
 import { openPullRequest } from './pr-helper';
@@ -146,6 +151,43 @@ export function createApp(options: UiServerOptions): Hono {
   };
 
   app.get('/', (c) => c.redirect(`/board?project=${options.defaultProject}`));
+
+  app.get('/board/all', async (c) => {
+    const summaries: ProjectSummary[] = [];
+    for (const name of projectNames) {
+      try {
+        const db = openDb(name);
+        const taskRows = db
+          .prepare(
+            `SELECT status, COUNT(*) AS n FROM tasks WHERE status != 'done' GROUP BY status`,
+          )
+          .all() as Array<{ status: string; n: number }>;
+        const agentRows = db
+          .prepare(
+            `SELECT name, status FROM agent_state WHERE status != 'archived' ORDER BY name`,
+          )
+          .all() as Array<{ name: string; status: string }>;
+        db.close();
+        const presentations = await loadAgentPresentations(name);
+        const genderByName = new Map(presentations.map((p) => [p.name, p.gender]));
+        summaries.push({
+          name,
+          counts: Object.fromEntries(taskRows.map((r) => [r.status, r.n])),
+          agents: agentRows.map((a) => {
+            const gender = genderByName.get(a.name);
+            return gender ? { ...a, gender } : a;
+          }),
+        });
+      } catch (err) {
+        console.warn(`[board/all] skip ${name}:`, (err as Error).message);
+      }
+    }
+    return c.html(
+      <Layout project={''} projects={projectNames} title="All projects" page="board">
+        <MultiProjectView summaries={summaries} />
+      </Layout>,
+    );
+  });
 
   app.get('/board', async (c) => {
     const project = currentProject(c.req.raw);
@@ -272,12 +314,17 @@ export function createApp(options: UiServerOptions): Hono {
 
   app.get('/agents', async (c) => {
     const project = currentProject(c.req.raw);
+    const url = new URL(c.req.raw.url);
+    const showArchived = url.searchParams.get('archived') === '1';
     const db = openDb(project);
-    const states = db
-      .prepare(
-        'SELECT name, status, last_heartbeat, current_task_id, tokens_today, tokens_budget FROM agent_state ORDER BY name',
-      )
-      .all() as Array<{
+    const states = (showArchived
+      ? db.prepare(
+          'SELECT name, status, last_heartbeat, current_task_id, tokens_today, tokens_budget FROM agent_state ORDER BY name',
+        )
+      : db.prepare(
+          `SELECT name, status, last_heartbeat, current_task_id, tokens_today, tokens_budget FROM agent_state WHERE status != 'archived' ORDER BY name`,
+        )
+    ).all() as Array<{
       name: string;
       status: string;
       last_heartbeat: number | null;
@@ -294,9 +341,74 @@ export function createApp(options: UiServerOptions): Hono {
     });
     return c.html(
       <Layout project={project} projects={projectNames} title="Agents" page="agents">
-        <AgentsList agents={merged} />
+        <AgentsList agents={merged} project={project} showArchived={showArchived} />
       </Layout>,
     );
+  });
+
+  /** Update agent_state.status with a guard so callers can't put it into an
+   *  invalid state (e.g. trying to 'resume' something that was already
+   *  working). The UI surfaces the corresponding buttons based on current
+   *  status, so the guard is defence-in-depth. */
+  const mutateAgent = (
+    project: string,
+    agent: string,
+    mutation: (current: string) => { status: string; blocked_reason?: string | null } | null,
+  ): boolean => {
+    const db = openDb(project);
+    const row = db
+      .prepare('SELECT status FROM agent_state WHERE name = ?')
+      .get(agent) as { status: string } | undefined;
+    if (!row) {
+      db.close();
+      return false;
+    }
+    const next = mutation(row.status);
+    if (!next) {
+      db.close();
+      return false;
+    }
+    db.prepare(
+      `UPDATE agent_state SET status = ?, blocked_reason = ? WHERE name = ?`,
+    ).run(next.status, next.blocked_reason ?? null, agent);
+    db.close();
+    bus.publish({ type: 'agent.status_changed', agent, status: next.status });
+    return true;
+  };
+
+  app.post('/api/agents/:name/pause', (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const ok = mutateAgent(project, name, (s) =>
+      s === 'idle' || s === 'blocked' ? { status: 'paused' } : null,
+    );
+    return ok ? c.body(null, 204) : c.json({ error: 'cannot pause in current state' }, 409);
+  });
+
+  app.post('/api/agents/:name/resume', (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const ok = mutateAgent(project, name, (s) =>
+      s === 'paused' || s === 'blocked' ? { status: 'idle', blocked_reason: null } : null,
+    );
+    return ok ? c.body(null, 204) : c.json({ error: 'cannot resume in current state' }, 409);
+  });
+
+  app.post('/api/agents/:name/archive', (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const ok = mutateAgent(project, name, () => ({ status: 'archived' }));
+    if (ok) bus.publish({ type: 'agent.archived', agent: name });
+    return ok ? c.body(null, 204) : c.json({ error: 'agent not found' }, 404);
+  });
+
+  app.post('/api/agents/:name/restore', (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const ok = mutateAgent(project, name, (s) =>
+      s === 'archived' ? { status: 'idle' } : null,
+    );
+    return ok ? c.body(null, 204) : c.json({ error: 'not archived' }, 409);
   });
 
   app.get('/agents/sidebar', async (c) => {
@@ -313,6 +425,117 @@ export function createApp(options: UiServerOptions): Hono {
       return gender ? { ...s, gender: gender as GenderHint } : s;
     });
     return c.html(<SidebarAgents agents={merged} />);
+  });
+
+  const renderGoalsRoot = (project: string) => {
+    const db = openDb(project);
+    const rows = db
+      .prepare(
+        `SELECT g.id, g.title, g.description, g.assignees, g.tasks_per_week, g.active,
+            (SELECT COUNT(*) FROM tasks t WHERE t.goal_id = g.id AND t.status != 'done') AS open_tasks
+         FROM goals g ORDER BY g.active DESC, g.created_at DESC`,
+      )
+      .all() as Array<{
+      id: string;
+      title: string;
+      description: string;
+      assignees: string;
+      tasks_per_week: number;
+      active: number;
+      open_tasks: number;
+    }>;
+    db.close();
+    const goals: GoalRow[] = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      assignees: JSON.parse(r.assignees || '[]') as string[],
+      tasks_per_week: r.tasks_per_week,
+      active: Boolean(r.active),
+      open_tasks: r.open_tasks,
+    }));
+    return goals;
+  };
+
+  app.get('/goals', async (c) => {
+    const project = currentProject(c.req.raw);
+    const goals = renderGoalsRoot(project);
+    const agents = await loadAgentPresentations(project);
+    return c.html(
+      <Layout project={project} projects={projectNames} title="Goals" page="goals">
+        <div id="goals-root">
+          <GoalsPage project={project} goals={goals} agents={agents} />
+        </div>
+      </Layout>,
+    );
+  });
+
+  // Returns the goals-root fragment only, for HTMX swaps after mutations.
+  const goalsFragment = async (project: string) => {
+    const goals = renderGoalsRoot(project);
+    const agents = await loadAgentPresentations(project);
+    return (
+      <div id="goals-root">
+        <GoalsPage project={project} goals={goals} agents={agents} />
+      </div>
+    );
+  };
+
+  app.post('/api/goals', async (c) => {
+    const project = currentProject(c.req.raw);
+    const form = await c.req.parseBody();
+    const id = String(form.id ?? '').trim();
+    const title = String(form.title ?? '').trim();
+    if (!id || !title) return c.json({ error: 'id and title required' }, 400);
+    const description = String(form.description ?? '').trim();
+    const assignees = String(form.assignees ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const tpw = Number.parseInt(String(form.tasks_per_week ?? '0'), 10) || 0;
+    const db = openDb(project);
+    db.prepare(
+      `INSERT INTO goals (id, title, description, assignees, tasks_per_week, active)
+       VALUES (?, ?, ?, ?, ?, 1)`,
+    ).run(id, title, description, JSON.stringify(assignees), tpw);
+    db.close();
+    bus.publish({ type: 'goal.created', goal_id: id });
+    return c.html(await goalsFragment(project));
+  });
+
+  app.post('/api/goals/:id/toggle', async (c) => {
+    const project = currentProject(c.req.raw);
+    const id = c.req.param('id');
+    const db = openDb(project);
+    db.prepare(
+      `UPDATE goals SET active = 1 - active, updated_at = ? WHERE id = ?`,
+    ).run(Date.now(), id);
+    db.close();
+    bus.publish({ type: 'goal.updated', goal_id: id });
+    return c.html(await goalsFragment(project));
+  });
+
+  app.delete('/api/goals/:id', async (c) => {
+    const project = currentProject(c.req.raw);
+    const id = c.req.param('id');
+    const db = openDb(project);
+    db.prepare(`DELETE FROM goals WHERE id = ?`).run(id);
+    db.close();
+    bus.publish({ type: 'goal.updated', goal_id: id });
+    return c.html(await goalsFragment(project));
+  });
+
+  app.get('/settings', async (c) => {
+    const project = currentProject(c.req.raw);
+    const projectPath = options.projects[project];
+    if (!projectPath) return c.notFound();
+    const tomlPath = join(projectPath, '.hq', 'project.toml');
+    const cfg = await loadProjectConfig(tomlPath);
+    return c.html(
+      <Layout project={project} projects={projectNames} title="Settings" page="settings">
+        <SettingsPage project={project} config={cfg} tomlPath={tomlPath} />
+      </Layout>,
+    );
   });
 
   app.get('/inbox', async (c) => {

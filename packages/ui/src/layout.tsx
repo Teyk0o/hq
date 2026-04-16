@@ -5,7 +5,7 @@ export interface LayoutProps {
   title?: string;
   project?: string;
   projects?: string[];
-  page?: 'board' | 'agents' | 'activity' | 'inbox';
+  page?: 'board' | 'agents' | 'activity' | 'inbox' | 'goals' | 'settings';
 }
 
 /**
@@ -146,6 +146,22 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           ::-webkit-scrollbar-track { background: transparent; }
           ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; border: 2px solid var(--bg); }
 
+          /* Loading skeleton: animated shimmer while htmx content loads */
+          .skel {
+            position: relative; overflow: hidden;
+            background: var(--surface-alt);
+            border-radius: 8px;
+          }
+          .skel::after {
+            content: ''; position: absolute; inset: 0;
+            transform: translateX(-100%);
+            background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+            animation: skel-shimmer 1.4s ease-in-out infinite;
+          }
+          @keyframes skel-shimmer { 100% { transform: translateX(100%); } }
+          .skel-line { height: 12px; margin: 6px 0; }
+          .skel-avatar { width: 20px; height: 20px; border-radius: 9999px; }
+
           /* Pulse (for working agents) */
           .pulse-dot { position: relative; }
           .pulse-dot::before { content: ''; position: absolute; inset: -3px; border-radius: 9999px; background: inherit; opacity: 0.35; animation: pulse 1.6s ease-out infinite; }
@@ -205,8 +221,32 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           function hqToggleSidebar(){
             document.body.classList.toggle('sidebar-open');
           }
+          // Browser Notification API — opt-in, persists the choice in
+          // localStorage. We only fire notifications when the tab is NOT
+          // focused; focused users already see the toast.
+          function hqNotifyEnabled(){ return localStorage.getItem('hq.notifyEnabled') === '1'; }
+          function hqRequestNotify(){
+            if (!('Notification' in window)) return;
+            Notification.requestPermission().then((p) => {
+              localStorage.setItem('hq.notifyEnabled', p === 'granted' ? '1' : '0');
+              const btn = document.getElementById('notify-toggle');
+              if (btn) btn.textContent = p === 'granted' ? 'Notifications on' : 'Notifications off';
+            });
+          }
+          function hqNotify(title, body){
+            if (!hqNotifyEnabled()) return;
+            if (document.visibilityState === 'visible') return;
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            try { new Notification(title, { body, icon: '/favicon.ico', tag: 'hq' }); } catch {}
+          }
           function hqInit(){
             if (window.lucide) window.lucide.createIcons();
+            const btn = document.getElementById('notify-toggle');
+            if (btn) {
+              const perm = ('Notification' in window) ? Notification.permission : 'default';
+              btn.textContent = perm === 'granted' && hqNotifyEnabled()
+                ? 'Notifications on' : 'Enable notifications';
+            }
             const evs = ['task.claimed','task.status_changed','task.reviewed','task.blocked','agent.heartbeat_started','agent.heartbeat_ended','message.sent','task.created'];
             const src = new EventSource('/events' + window.location.search);
             const icon = {
@@ -219,8 +259,18 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
                 const d = JSON.parse(e.data);
                 const who = d.agent || d.by || d.reviewer || d.from || '';
                 const sub = d.task_id ? ' · ' + d.task_id.slice(0,6) : '';
-                const html = '<i data-lucide="'+(icon[ev]||'dot')+'" style="color:var(--accent)"></i><div><div style="font-weight:500">' + ev.replace(/\\./g,' ') + '</div><div style="color:var(--ink-muted);font-size:11px">' + who + sub + '</div></div>';
+                const label = ev.replace(/\\./g,' ');
+                const html = '<i data-lucide="'+(icon[ev]||'dot')+'" style="color:var(--accent)"></i><div><div style="font-weight:500">' + label + '</div><div style="color:var(--ink-muted);font-size:11px">' + who + sub + '</div></div>';
                 hqShowToast(html, 'info');
+                // Native notification only for the events the operator
+                // actually needs to act on when the tab isn't focused.
+                const isCritical =
+                  (ev === 'task.status_changed' && d.to === 'review') ||
+                  ev === 'task.blocked' ||
+                  ev === 'message.sent';
+                if (isCritical) {
+                  hqNotify(label, [who, sub].filter(Boolean).join(' '));
+                }
               } catch (err) {}
             }));
           }
@@ -270,6 +320,15 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
                     </option>
                   ))}
                 </select>
+                {projects.length > 1 && (
+                  <a
+                    href="/board/all"
+                    class="text-[12px] text-muted mt-2 inline-flex items-center gap-1.5 hover:text-[color:var(--accent)]"
+                  >
+                    <i data-lucide="layout-dashboard" class="icon-sm"></i>
+                    All projects
+                  </a>
+                )}
               </div>
             )}
             <nav class="mt-6 flex flex-col gap-1">
@@ -283,6 +342,8 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
                 badgeUrl={`/inbox/unread?project=${project ?? ''}`}
               />
               <NavItem href={`/activity?project=${project ?? ''}`} active={page === 'activity'} icon="activity" label="Activity" />
+              <NavItem href={`/goals?project=${project ?? ''}`} active={page === 'goals'} icon="target" label="Goals" />
+              <NavItem href={`/settings?project=${project ?? ''}`} active={page === 'settings'} icon="settings" label="Settings" />
             </nav>
 
             <div class="mt-7">
@@ -293,12 +354,28 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
                 hx-trigger="load, sse:agent.status_changed from:body, sse:agent.heartbeat_started from:body, sse:agent.heartbeat_ended from:body"
                 hx-swap="innerHTML"
               >
-                <div class="text-[13px] text-faint px-1 py-1">Loading…</div>
+                <ul class="flex flex-col gap-0.5 px-1 py-1">
+                  {[0, 1, 2].map(() => (
+                    <li class="flex items-center gap-2.5 py-1.5">
+                      <span class="skel skel-avatar" />
+                      <span class="skel skel-line flex-1" style="max-width: 120px" />
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>
 
-          <div class="p-5 border-t border-soft">
+          <div class="p-5 border-t border-soft flex flex-col gap-2">
+            <button
+              id="notify-toggle"
+              type="button"
+              onclick="hqRequestNotify()"
+              class="btn w-full justify-center"
+            >
+              <i data-lucide="bell"></i>
+              Enable notifications
+            </button>
             <button
               hx-post="/api/daemon/pause"
               hx-swap="none"
@@ -339,7 +416,9 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
               hx-trigger="load, sse:claude.usage_updated from:body"
               hx-swap="innerHTML"
             >
-              <span class="text-[13px] text-faint">loading…</span>
+              <span class="skel" style="width: 78px; height: 26px; border-radius: 999px" />
+              <span class="skel" style="width: 78px; height: 26px; border-radius: 999px" />
+              <span class="skel" style="width: 78px; height: 26px; border-radius: 999px" />
             </div>
           </header>
           <div class="flex-1 min-h-0 px-10 py-7 flex flex-col overflow-hidden">{children}</div>
