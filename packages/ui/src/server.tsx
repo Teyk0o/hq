@@ -14,6 +14,7 @@ import {
   BoardHeader,
   Inbox,
   Kanban,
+  SettingsPage,
   SidebarAgents,
   TaskCreateForm,
   TaskDrawer,
@@ -313,6 +314,19 @@ export function createApp(options: UiServerOptions): Hono {
       return gender ? { ...s, gender: gender as GenderHint } : s;
     });
     return c.html(<SidebarAgents agents={merged} />);
+  });
+
+  app.get('/settings', async (c) => {
+    const project = currentProject(c.req.raw);
+    const projectPath = options.projects[project];
+    if (!projectPath) return c.notFound();
+    const tomlPath = join(projectPath, '.hq', 'project.toml');
+    const cfg = await loadProjectConfig(tomlPath);
+    return c.html(
+      <Layout project={project} projects={projectNames} title="Settings" page="settings">
+        <SettingsPage project={project} config={cfg} tomlPath={tomlPath} />
+      </Layout>,
+    );
   });
 
   app.get('/inbox', async (c) => {

@@ -5,7 +5,7 @@ export interface LayoutProps {
   title?: string;
   project?: string;
   projects?: string[];
-  page?: 'board' | 'agents' | 'activity' | 'inbox';
+  page?: 'board' | 'agents' | 'activity' | 'inbox' | 'goals' | 'settings';
 }
 
 /**
@@ -283,6 +283,8 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
                 badgeUrl={`/inbox/unread?project=${project ?? ''}`}
               />
               <NavItem href={`/activity?project=${project ?? ''}`} active={page === 'activity'} icon="activity" label="Activity" />
+              <NavItem href={`/goals?project=${project ?? ''}`} active={page === 'goals'} icon="target" label="Goals" />
+              <NavItem href={`/settings?project=${project ?? ''}`} active={page === 'settings'} icon="settings" label="Settings" />
             </nav>
 
             <div class="mt-7">

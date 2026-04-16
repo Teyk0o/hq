@@ -818,6 +818,125 @@ export const AgentsList: FC<{
   </div>
 );
 
+/** Small labelled key/value row used on the Settings page. */
+const SettingRow: FC<{ label: string; value: string | number | boolean }> = ({
+  label,
+  value,
+}) => (
+  <div class="flex items-baseline justify-between gap-4 py-2 border-b border-soft last:border-b-0">
+    <span class="text-[13px] text-muted">{label}</span>
+    <span class="text-[13px] mono">{String(value)}</span>
+  </div>
+);
+
+/**
+ * Read-only settings page: shows the parsed, post-defaults view of the
+ * project's project.toml so the operator can verify what the daemon is
+ * actually using. Editing is deliberately out of scope for MVP — the TOML
+ * file is the canonical source and editing it preserves comments.
+ */
+export const SettingsPage: FC<{
+  project: string;
+  config: {
+    project: { name: string; default_model: string; default_branch: string };
+    scheduler: {
+      interval_minutes: number;
+      stagger_seconds: number;
+      max_concurrent_agents: number;
+      daily_token_budget: number;
+    };
+    heartbeat: {
+      default_timeout_minutes: number;
+      max_session_hours: number;
+      retry_max: number;
+    };
+    kanban: {
+      min_reviewers: number;
+      require_lint_before_review: boolean;
+      require_typecheck_before_review: boolean;
+    };
+    sandbox: { enabled: boolean; share_net: boolean };
+    webhook: { discord_url: string; discord_events: string[] };
+    rules: unknown[];
+    goals: unknown[];
+  };
+  tomlPath: string;
+}> = ({ config, tomlPath }) => (
+  <div class="max-w-3xl grid gap-5">
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="settings"></i>
+        <h2 class="text-[16px] font-semibold">Project</h2>
+      </div>
+      <SettingRow label="Name" value={config.project.name} />
+      <SettingRow label="Default model" value={config.project.default_model} />
+      <SettingRow label="Default branch" value={config.project.default_branch} />
+    </section>
+
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="timer"></i>
+        <h2 class="text-[16px] font-semibold">Scheduler</h2>
+      </div>
+      <SettingRow label="Interval (minutes)" value={config.scheduler.interval_minutes} />
+      <SettingRow label="Stagger (seconds)" value={config.scheduler.stagger_seconds} />
+      <SettingRow label="Max concurrent agents" value={config.scheduler.max_concurrent_agents} />
+      <SettingRow label="Daily token budget" value={config.scheduler.daily_token_budget} />
+    </section>
+
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="heart-pulse"></i>
+        <h2 class="text-[16px] font-semibold">Heartbeat</h2>
+      </div>
+      <SettingRow label="Timeout (minutes)" value={config.heartbeat.default_timeout_minutes} />
+      <SettingRow label="Session max (hours)" value={config.heartbeat.max_session_hours} />
+      <SettingRow label="Retry max" value={config.heartbeat.retry_max} />
+    </section>
+
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="check-check"></i>
+        <h2 class="text-[16px] font-semibold">Review gate</h2>
+      </div>
+      <SettingRow label="Min reviewers" value={config.kanban.min_reviewers} />
+      <SettingRow label="Require lint pre-review" value={config.kanban.require_lint_before_review} />
+      <SettingRow label="Require typecheck pre-review" value={config.kanban.require_typecheck_before_review} />
+    </section>
+
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="shield"></i>
+        <h2 class="text-[16px] font-semibold">Sandbox & webhooks</h2>
+      </div>
+      <SettingRow label="Sandbox enabled" value={config.sandbox.enabled} />
+      <SettingRow label="Sandbox network" value={config.sandbox.share_net ? 'shared' : 'isolated'} />
+      <SettingRow
+        label="Discord webhook"
+        value={config.webhook.discord_url ? '(set)' : '(not set)'}
+      />
+      <SettingRow
+        label="Discord events"
+        value={config.webhook.discord_events.join(', ') || '(none)'}
+      />
+    </section>
+
+    <section class="card p-5">
+      <div class="flex items-center gap-2 mb-3">
+        <i data-lucide="list-checks"></i>
+        <h2 class="text-[16px] font-semibold">Rules & goals</h2>
+      </div>
+      <SettingRow label="Rules defined" value={config.rules.length} />
+      <SettingRow label="Goals defined" value={config.goals.length} />
+    </section>
+
+    <p class="text-[12px] text-faint">
+      Editing is done by hand in <span class="mono">{tomlPath}</span>. The
+      daemon re-reads project.toml on each scheduler tick.
+    </p>
+  </div>
+);
+
 export const SidebarAgents: FC<{
   agents: Array<{ name: string; gender?: GenderHint; status: string }>;
 }> = ({ agents }) => (
