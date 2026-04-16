@@ -248,7 +248,13 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
             <nav class="mt-6 flex flex-col gap-1">
               <NavItem href={`/board?project=${project ?? ''}`} active={page === 'board'} icon="layout-grid" label="Board" />
               <NavItem href={`/agents?project=${project ?? ''}`} active={page === 'agents'} icon="users" label="Agents" />
-              <NavItem href={`/inbox?project=${project ?? ''}`} active={page === 'inbox'} icon="inbox" label="Inbox" />
+              <NavItem
+                href={`/inbox?project=${project ?? ''}`}
+                active={page === 'inbox'}
+                icon="inbox"
+                label="Inbox"
+                badgeUrl={`/inbox/unread?project=${project ?? ''}`}
+              />
               <NavItem href={`/activity?project=${project ?? ''}`} active={page === 'activity'} icon="activity" label="Activity" />
             </nav>
 
@@ -308,12 +314,13 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
   </html>
 );
 
-const NavItem: FC<{ href: string; active: boolean; icon: string; label: string }> = ({
-  href,
-  active,
-  icon,
-  label,
-}) => (
+const NavItem: FC<{
+  href: string;
+  active: boolean;
+  icon: string;
+  label: string;
+  badgeUrl?: string;
+}> = ({ href, active, icon, label, badgeUrl }) => (
   <a
     href={href}
     class={
@@ -324,5 +331,13 @@ const NavItem: FC<{ href: string; active: boolean; icon: string; label: string }
   >
     <i data-lucide={icon}></i>
     <span>{label}</span>
+    {badgeUrl && (
+      <span
+        class="ml-auto"
+        hx-get={badgeUrl}
+        hx-trigger="load, sse:message.sent from:body, every 30s"
+        hx-swap="innerHTML"
+      />
+    )}
   </a>
 );

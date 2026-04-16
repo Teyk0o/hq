@@ -42,34 +42,53 @@ export function installEventTriggers(
   // same agent (the agent_state → working flip also guards, but this is cheap).
   const inFlight = new Set<string>();
 
-  const unsubscribe = bus.subscribe((event: HQEvent) => {
-    if (event.type !== 'task.status_changed') return;
-    if (event.to !== 'peer_review') return;
+  const wake = async (
+    project: { name: string; path: string },
+    agent: string,
+    reason: string,
+  ) => {
+    const db = dbFor(project.name);
+    if (!db) return;
+    const state = db.select().from(agentState).where(eq(agentState.name, agent)).get();
+    if (!state || state.status !== 'idle') return;
+    const key = `${project.name}:${agent}`;
+    if (inFlight.has(key)) return;
+    inFlight.add(key);
+    try {
+      console.log(`[triggers] ${project.name}: ${reason}, waking ${agent}`);
+      await triggerHeartbeat({ projectPath: project.path, agentName: agent, db });
+    } catch (err) {
+      console.error(`[triggers] ${project.name}/${agent} failed:`, err);
+    } finally {
+      setTimeout(() => inFlight.delete(key), 30_000);
+    }
+  };
 
-    void (async () => {
-      for (const project of projects) {
-        const db = dbFor(project.name);
-        if (!db) continue;
-        const reviewer = await pickIdleReviewer(project.path, db, event.by);
-        if (!reviewer) continue;
-        const key = `${project.name}:${reviewer}`;
-        if (inFlight.has(key)) continue;
-        inFlight.add(key);
-        try {
-          console.log(
-            `[triggers] ${project.name}: task.status_changed → peer_review, waking ${reviewer}`,
-          );
-          await triggerHeartbeat({ projectPath: project.path, agentName: reviewer, db });
-        } catch (err) {
-          console.error(`[triggers] ${project.name}/${reviewer} failed:`, err);
-        } finally {
-          // Release the lock after a grace period so another task hitting
-          // peer_review during this heartbeat doesn't pile up a second launch
-          // on an agent that is still working.
-          setTimeout(() => inFlight.delete(key), 30_000);
+  const unsubscribe = bus.subscribe((event: HQEvent) => {
+    if (event.type === 'task.status_changed' && event.to === 'peer_review') {
+      void (async () => {
+        for (const project of projects) {
+          const db = dbFor(project.name);
+          if (!db) continue;
+          const reviewer = await pickIdleReviewer(project.path, db, event.by);
+          if (!reviewer) continue;
+          await wake(project, reviewer, 'task.status_changed → peer_review');
         }
-      }
-    })();
+      })();
+      return;
+    }
+
+    // A direct message (@mention or explicit DM) wakes the recipient if idle.
+    // Broadcast '*' is intentionally NOT fanned out to every agent — that
+    // would be a thundering-herd every time someone says "hi team".
+    if (event.type === 'message.sent' && event.to !== '*' && event.to !== 'human') {
+      void (async () => {
+        for (const project of projects) {
+          await wake(project, event.to, `message.sent from ${event.from}`);
+        }
+      })();
+      return;
+    }
   });
 
   return unsubscribe;

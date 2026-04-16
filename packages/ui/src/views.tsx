@@ -26,6 +26,7 @@ export interface KanbanTask {
   assignee: string | null;
   priority: number;
   package: string | null;
+  reviewers?: string[];
 }
 
 export interface Filters {
@@ -239,11 +240,44 @@ export const TaskCard: FC<{
             {task.package}
           </span>
         )}
+        {task.reviewers && task.reviewers.length > 0 && (
+          <ReviewerStack reviewers={task.reviewers} agents={agents} />
+        )}
         <span class="ml-auto text-[11px] text-faint mono">{task.id.slice(0, 6)}</span>
       </div>
     </div>
   );
 };
+
+const ReviewerStack: FC<{ reviewers: string[]; agents: AgentPresentation[] }> = ({
+  reviewers,
+  agents,
+}) => (
+  <span
+    class="inline-flex items-center gap-0.5 text-[11px] text-muted"
+    title={`Reviewed by ${reviewers.join(', ')}`}
+  >
+    <i data-lucide="eye" class="icon-sm" style="color:var(--violet)"></i>
+    <span class="flex -space-x-1.5 ml-0.5">
+      {reviewers.slice(0, 3).map((r) => (
+        <span
+          class="inline-block rounded-full ring-2"
+          style="--tw-ring-color: var(--surface); ring-width: 2px; box-shadow: 0 0 0 2px var(--surface)"
+        >
+          <Avatar agent={agentFor(agents, r)} size={18} />
+        </span>
+      ))}
+      {reviewers.length > 3 && (
+        <span
+          class="inline-flex items-center justify-center rounded-full text-[9px] font-semibold bg-white border border-soft"
+          style="width:18px;height:18px;color:var(--ink-muted);box-shadow: 0 0 0 2px var(--surface)"
+        >
+          +{reviewers.length - 3}
+        </span>
+      )}
+    </span>
+  </span>
+);
 
 export const UsageWidget: FC<{ snap: UsageSnapshot | null }> = ({ snap }) => {
   if (!snap) return <span class="text-[12px] text-faint">usage loading…</span>;
@@ -556,8 +590,11 @@ export const Inbox: FC<{
     read_at: number | null;
   }>;
   agents: AgentPresentation[];
-}> = ({ messages, agents }) => (
-  <ul class="space-y-3 max-w-4xl">
+  project: string;
+}> = ({ messages, agents, project }) => (
+  <div class="max-w-4xl space-y-5">
+    <ComposeMessage project={project} agents={agents} />
+    <ul class="space-y-3">
     {messages.length === 0 && (
       <li class="text-[14px] text-faint py-10 text-center">
         <i data-lucide="inbox" class="icon-lg" style="color:var(--ink-faint)"></i>
@@ -592,7 +629,54 @@ export const Inbox: FC<{
         </li>
       );
     })}
-  </ul>
+    </ul>
+  </div>
+);
+
+const ComposeMessage: FC<{ project: string; agents: AgentPresentation[] }> = ({
+  project,
+  agents,
+}) => (
+  <details class="card p-0 overflow-hidden">
+    <summary
+      class="px-5 py-4 flex items-center gap-2 cursor-pointer list-none hover-bg"
+      style="user-select:none"
+    >
+      <i data-lucide="pencil-line"></i>
+      <span class="font-semibold text-[14px]">Send a message to the team</span>
+      <i data-lucide="chevron-down" class="icon-sm ml-auto" style="color:var(--ink-faint)"></i>
+    </summary>
+    <form
+      class="px-5 pb-5 flex flex-col gap-3"
+      hx-post={`/api/messages?project=${project}`}
+      hx-swap="none"
+    >
+      <div class="grid grid-cols-2 gap-3">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">To</span>
+          <select name="to" class="field" required>
+            <option value="*">Everyone (broadcast)</option>
+            {agents.map((a) => (
+              <option value={a.name}>@{a.name}</option>
+            ))}
+          </select>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Subject</span>
+          <input name="subject" class="field" placeholder="optional" />
+        </label>
+      </div>
+      <label class="flex flex-col gap-1.5">
+        <span class="text-[12px] font-semibold uppercase tracking-wider text-faint">Message</span>
+        <textarea name="body" rows={3} required class="field" placeholder="Write your message…" />
+      </label>
+      <div class="flex justify-end">
+        <button type="submit" class="btn btn-primary">
+          <i data-lucide="send-horizontal"></i> Send
+        </button>
+      </div>
+    </form>
+  </details>
 );
 
 export const ActivityFeed: FC<{

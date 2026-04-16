@@ -100,27 +100,40 @@ export function createApp(options: UiServerOptions): Hono {
     const conditions: string[] = [];
     const params: (string | number)[] = [];
     if (filters.assignee) {
-      conditions.push('assignee = ?');
+      conditions.push('t.assignee = ?');
       params.push(filters.assignee);
     }
     if (filters.priority) {
-      conditions.push('priority = ?');
+      conditions.push('t.priority = ?');
       params.push(filters.priority);
     }
     if (filters.package) {
-      conditions.push('package = ?');
+      conditions.push('t.package = ?');
       params.push(filters.package);
     }
     if (filters.search) {
-      conditions.push('title LIKE ?');
+      conditions.push('t.title LIKE ?');
       params.push(`%${filters.search}%`);
     }
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
-    const tasks = db
+    // GROUP_CONCAT(DISTINCT reviewer) gives us the unique reviewers so the
+    // task card can render their avatar stack without N+1 queries.
+    const rows = db
       .prepare(
-        `SELECT id, title, status, assignee, priority, package FROM tasks ${where} ORDER BY priority, created_at DESC`,
+        `SELECT t.id, t.title, t.status, t.assignee, t.priority, t.package,
+                GROUP_CONCAT(DISTINCT r.reviewer) AS reviewer_names
+           FROM tasks t
+           LEFT JOIN reviews r ON r.task_id = t.id
+           ${where}
+           GROUP BY t.id
+           ORDER BY t.priority, t.created_at DESC`,
       )
-      .all(...params) as KanbanTask[];
+      .all(...params) as Array<KanbanTask & { reviewer_names: string | null }>;
+    const tasks: KanbanTask[] = rows.map((r) => {
+      const { reviewer_names, ...rest } = r;
+      const reviewers = reviewer_names ? reviewer_names.split(',').filter(Boolean) : [];
+      return { ...rest, reviewers };
+    });
     const assignees = (db
       .prepare(`SELECT DISTINCT assignee FROM tasks WHERE assignee IS NOT NULL ORDER BY assignee`)
       .all() as Array<{ assignee: string }>).map((r) => r.assignee);
@@ -301,13 +314,62 @@ export function createApp(options: UiServerOptions): Hono {
       created_at: number;
       read_at: number | null;
     }>;
+    // Mark all messages (to human or broadcast) as read when the user opens
+    // the inbox. Agent-directed messages are marked read when the agent's
+    // MCP read_messages tool is called.
+    db.prepare(
+      `UPDATE messages SET read_at = ? WHERE read_at IS NULL AND (to_agent = '*' OR to_agent = 'human')`,
+    ).run(Date.now());
     db.close();
     const agents = await loadAgentPresentations(project);
     return c.html(
       <Layout project={project} projects={projectNames} title="Inbox" page="inbox">
-        <Inbox messages={messages} agents={agents} />
+        <Inbox messages={messages} agents={agents} project={project} />
       </Layout>,
     );
+  });
+
+  // Unread count for the sidebar badge — broadcasts and messages directly
+  // addressed to the human that haven't been viewed yet.
+  app.get('/inbox/unread', (c) => {
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const row = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM messages WHERE read_at IS NULL AND (to_agent = '*' OR to_agent = 'human')`,
+      )
+      .get() as { n: number };
+    db.close();
+    return c.html(
+      row.n > 0 ? (
+        <span
+          class="ml-auto text-[11px] px-2 py-0.5 rounded-full font-semibold text-white"
+          style="background: var(--accent); min-width: 18px; text-align: center"
+        >
+          {row.n}
+        </span>
+      ) : (
+        <span></span>
+      ),
+    );
+  });
+
+  // Human compose: send a message to an agent (or broadcast to all).
+  app.post('/api/messages', async (c) => {
+    const project = currentProject(c.req.raw);
+    const form = await c.req.parseBody();
+    const to = String(form.to ?? '').trim();
+    const subject = String(form.subject ?? '').trim();
+    const body = String(form.body ?? '').trim();
+    if (!to || !body) return c.json({ error: 'to + body required' }, 400);
+    const db = openDb(project);
+    const id = newId();
+    db.prepare(
+      `INSERT INTO messages (id, from_agent, to_agent, subject, body) VALUES (?, 'human', ?, ?, ?)`,
+    ).run(id, to, subject, body);
+    db.close();
+    bus.publish({ type: 'message.sent', from: 'human', to, message_id: id });
+    return c.redirect(`/inbox?project=${project}`);
   });
 
   app.get('/usage/widget', async (c) => {
@@ -380,7 +442,9 @@ export function createApp(options: UiServerOptions): Hono {
     const body = String(form.body ?? '').trim();
     if (!body) return c.json({ error: 'body required' }, 400);
     const db = openDb(project);
-    const task = db.prepare('SELECT id FROM tasks WHERE id = ?').get(id);
+    const task = db.prepare('SELECT id, title FROM tasks WHERE id = ?').get(id) as
+      | { id: string; title: string }
+      | null;
     if (!task) {
       db.close();
       return c.json({ error: 'task not found' }, 404);
@@ -390,6 +454,18 @@ export function createApp(options: UiServerOptions): Hono {
     db.prepare(
       `INSERT INTO comments (id, task_id, author, body, mentions) VALUES (?, ?, 'human', ?, ?)`,
     ).run(commentId, id, body, JSON.stringify(mentions));
+    // Convert each @mention into an inbox message so the recipient sees it
+    // alongside agent-to-agent DMs, and so the message.sent event can trigger
+    // an idle agent to wake up.
+    const fanoutIds: Array<{ to: string; id: string }> = [];
+    for (const mention of mentions) {
+      const msgId = newId();
+      db.prepare(
+        `INSERT INTO messages (id, from_agent, to_agent, subject, body)
+         VALUES (?, 'human', ?, ?, ?)`,
+      ).run(msgId, mention, `You were mentioned on: ${task.title}`, body);
+      fanoutIds.push({ to: mention, id: msgId });
+    }
     db.close();
     bus.publish({
       type: 'task.commented',
@@ -397,8 +473,9 @@ export function createApp(options: UiServerOptions): Hono {
       author: 'human',
       comment_id: commentId,
     });
-    // Re-render the drawer in place rather than redirecting — redirects feel
-    // like full-page reloads to the user.
+    for (const f of fanoutIds) {
+      bus.publish({ type: 'message.sent', from: 'human', to: f.to, message_id: f.id });
+    }
     const refreshed = await renderTaskDrawer(project, id);
     if (!refreshed) return c.json({ error: 'task disappeared' }, 404);
     return c.html(refreshed);

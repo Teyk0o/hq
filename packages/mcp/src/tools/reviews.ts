@@ -1,6 +1,7 @@
 import {
   activity as activityTable,
   comments as commentsTable,
+  messages as messagesTable,
   newId,
   reviews as reviewsTable,
   tasks as tasksTable,
@@ -123,16 +124,47 @@ export async function addComment(
   input: { task_id: string; body: string; mentions?: string[] },
 ) {
   const id = newId();
-  ctx.db
-    .insert(commentsTable)
-    .values({
-      id,
-      taskId: input.task_id,
-      author: ctx.agentName,
-      body: input.body,
-      mentions: JSON.stringify(input.mentions ?? []),
-    })
-    .run();
+  // Extract mentions from the body if the caller didn't pass them explicitly —
+  // agents often write @names inline without remembering to fill the array.
+  const explicit = input.mentions ?? [];
+  const inlineMatches = [...input.body.matchAll(/@([a-z][a-z0-9_-]*)/gi)].map((m) =>
+    m[1]!.toLowerCase(),
+  );
+  const mentions = [...new Set([...explicit, ...inlineMatches])].filter(
+    (m) => m !== ctx.agentName,
+  );
+
+  const task = ctx.db
+    .select()
+    .from(tasksTable)
+    .where(eq(tasksTable.id, input.task_id))
+    .get();
+
+  const fanout: Array<{ to: string; id: string }> = [];
+  ctx.db.transaction((tx) => {
+    tx.insert(commentsTable)
+      .values({
+        id,
+        taskId: input.task_id,
+        author: ctx.agentName,
+        body: input.body,
+        mentions: JSON.stringify(mentions),
+      })
+      .run();
+    for (const mention of mentions) {
+      const msgId = newId();
+      tx.insert(messagesTable)
+        .values({
+          id: msgId,
+          fromAgent: ctx.agentName,
+          toAgent: mention,
+          subject: task ? `Mention on: ${task.title}` : 'You were mentioned',
+          body: input.body,
+        })
+        .run();
+      fanout.push({ to: mention, id: msgId });
+    }
+  });
 
   ctx.bus.publish({
     type: 'task.commented',
@@ -140,5 +172,13 @@ export async function addComment(
     author: ctx.agentName,
     comment_id: id,
   });
-  return { id };
+  for (const f of fanout) {
+    ctx.bus.publish({
+      type: 'message.sent',
+      from: ctx.agentName,
+      to: f.to,
+      message_id: f.id,
+    });
+  }
+  return { id, fanout: fanout.length };
 }
