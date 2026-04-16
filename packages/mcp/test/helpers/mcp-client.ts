@@ -28,6 +28,9 @@ export async function startMcpClient(
     stdio: ['pipe', 'pipe', 'pipe'],
     env: process.env,
   });
+  // Drain stderr so the subprocess doesn't block once the pipe buffer fills.
+  // The MCP server logs freely to stderr; without this, tests hang at random.
+  proc.stderr.on('data', () => undefined);
   let nextId = 1;
   const pending = new Map<number, (value: unknown) => void>();
   let buffer = '';

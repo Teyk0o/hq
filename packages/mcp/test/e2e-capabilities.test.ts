@@ -13,7 +13,7 @@ const args = (project: string, agent: string) => [
   agent,
 ];
 const session = async (project: string, agent: string): Promise<McpClient> => {
-  const c = await startMcpClient('bun', args(project, agent));
+  const c = await startMcpClient(process.execPath, args(project, agent));
   await c.initialize();
   return c;
 };

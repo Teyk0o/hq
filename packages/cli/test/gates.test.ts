@@ -21,7 +21,7 @@ async function runGate(
   payload: Record<string, unknown>,
 ): Promise<GateResult> {
   return new Promise((resolve) => {
-    const proc = spawn('bun', ['run', BIN, command, '--project', project, '--agent', agent], {
+    const proc = spawn(process.execPath, ['run', BIN, command, '--project', project, '--agent', agent], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';

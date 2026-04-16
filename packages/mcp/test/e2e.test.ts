@@ -10,7 +10,7 @@ import { startMcpClient, type McpClient } from './helpers/mcp-client';
  * end-to-end which is the single contract agents depend on.
  */
 
-const MCP_BIN = 'bun';
+const MCP_BIN = process.execPath;
 const MCP_ARGS = (project: string, agent: string) => [
   'run',
   new URL('../src/cli-entry.ts', import.meta.url).pathname,
@@ -43,7 +43,7 @@ describe('e2e: worker lifecycle on a single task', () => {
   });
   afterAll(() => proj.cleanup());
 
-  test('alice can complete the whole todo → peer_review cycle', { timeout: 15_000 }, async () => {
+  test('alice can complete the whole todo → peer_review cycle', async () => {
     const alice = await session(proj.root, 'alice');
     try {
       // 1. Heartbeat starts.
@@ -106,7 +106,7 @@ describe('e2e: claim race between two workers', () => {
   });
   afterAll(() => proj.cleanup());
 
-  test('exactly one of two concurrent claims wins', { timeout: 15_000 }, async () => {
+  test('exactly one of two concurrent claims wins', async () => {
     const alice = await session(proj.root, 'alice');
     const bob = await session(proj.root, 'bob');
     try {
@@ -122,7 +122,11 @@ describe('e2e: claim race between two workers', () => {
       const winners = [a.ok, b.ok].filter(Boolean).length;
       expect(winners).toBe(1);
       const loser = a.ok ? b : a;
-      expect(loser.error?.code).toBe('claim_race_lost');
+      // Depending on subprocess timing the loser may catch the task either at
+      // the UPDATE step (claim_race_lost) or at the pre-transition check
+      // after the winner committed (invalid_transition). Both are valid
+      // "you didn't win the race" outcomes.
+      expect(['claim_race_lost', 'invalid_transition']).toContain(loser.error?.code);
 
       // DB row should show exactly one assignee.
       const row = db.prepare(`SELECT assignee FROM tasks WHERE id = ?`).get(taskId) as {
@@ -156,7 +160,7 @@ describe('e2e: peer-review gate auto-promotes to review', () => {
   });
   afterAll(() => proj.cleanup());
 
-  test('bob can review; single approved review moves task to review', { timeout: 15_000 }, async () => {
+  test('bob can review; single approved review moves task to review', async () => {
     const bob = await session(proj.root, 'bob');
     try {
       await bob.call('start_heartbeat', {});
@@ -198,7 +202,7 @@ describe('e2e: changes_requested kicks the task back to in_progress', () => {
   });
   afterAll(() => proj.cleanup());
 
-  test('changes_requested moves task back + requires non-empty body', { timeout: 15_000 }, async () => {
+  test('changes_requested moves task back + requires non-empty body', async () => {
     const bob = await session(proj.root, 'bob');
     try {
       await bob.call('start_heartbeat', {});
@@ -241,7 +245,7 @@ describe('e2e: @mentions fan out to the messages inbox', () => {
   });
   afterAll(() => proj.cleanup());
 
-  test('add_comment with @bob creates a messages row addressed to bob', { timeout: 15_000 }, async () => {
+  test('add_comment with @bob creates a messages row addressed to bob', async () => {
     const alice = await session(proj.root, 'alice');
     try {
       await alice.call('start_heartbeat', {});
@@ -294,7 +298,7 @@ packages = ["api"]
   });
   afterAll(() => proj.cleanup());
 
-  test('can claim api, refuses docs with out_of_scope', { timeout: 15_000 }, async () => {
+  test('can claim api, refuses docs with out_of_scope', async () => {
     const alice = await session(proj.root, 'alice');
     try {
       await alice.call('start_heartbeat', {});
