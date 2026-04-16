@@ -875,6 +875,79 @@ export const AgentsList: FC<{
   </div>
 );
 
+export interface ProjectSummary {
+  name: string;
+  counts: Record<string, number>;
+  agents: Array<{ name: string; status: string; gender?: GenderHint }>;
+}
+
+export const MultiProjectView: FC<{ summaries: ProjectSummary[] }> = ({ summaries }) => (
+  <div class="grid gap-4 grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 max-w-6xl">
+    {summaries.length === 0 && (
+      <p class="col-span-full text-[14px] text-faint text-center py-10">
+        No projects registered yet.
+      </p>
+    )}
+    {summaries.map((p) => {
+      const total = Object.values(p.counts).reduce((sum, n) => sum + n, 0);
+      const activeAgents = p.agents.filter((a) => a.status === 'working').length;
+      return (
+        <a
+          href={`/board?project=${p.name}`}
+          class="card p-5 block transition-shadow hover:shadow-md"
+          style="border-top: 3px solid var(--accent)"
+        >
+          <div class="flex items-center gap-2">
+            <i data-lucide="folder"></i>
+            <h3 class="text-[15px] font-semibold">{p.name}</h3>
+            <span class="ml-auto text-[11px] text-faint mono">{total} tasks</span>
+          </div>
+          <div class="mt-3 grid grid-cols-4 gap-2 text-[11px]">
+            {(
+              [
+                { state: 'todo', label: 'To do', colour: 'var(--teal)' },
+                { state: 'in_progress', label: 'In prog', colour: 'var(--warn)' },
+                { state: 'peer_review', label: 'Peer', colour: 'var(--violet)' },
+                { state: 'review', label: 'Review', colour: 'var(--accent)' },
+              ] as const
+            ).map((col) => (
+              <div class="flex flex-col items-center gap-0.5">
+                <span class="mono text-[16px] font-semibold" style={`color:${col.colour}`}>
+                  {p.counts[col.state] ?? 0}
+                </span>
+                <span class="text-faint">{col.label}</span>
+              </div>
+            ))}
+          </div>
+          <div class="mt-3 pt-3 border-t border-soft flex items-center gap-2">
+            <div class="flex -space-x-1.5">
+              {p.agents.slice(0, 4).map((a) => (
+                <span
+                  class="inline-block rounded-full"
+                  style="box-shadow: 0 0 0 2px var(--surface)"
+                >
+                  <Avatar agent={a} size={22} />
+                </span>
+              ))}
+              {p.agents.length > 4 && (
+                <span
+                  class="inline-flex items-center justify-center rounded-full text-[10px] font-semibold bg-white border border-soft"
+                  style="width:22px;height:22px;color:var(--ink-muted);box-shadow:0 0 0 2px var(--surface)"
+                >
+                  +{p.agents.length - 4}
+                </span>
+              )}
+            </div>
+            <span class="text-[11px] text-muted">
+              {p.agents.length} agent(s){activeAgents > 0 ? ` · ${activeAgents} working` : ''}
+            </span>
+          </div>
+        </a>
+      );
+    })}
+  </div>
+);
+
 export interface GoalRow {
   id: string;
   title: string;

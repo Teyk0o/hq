@@ -270,6 +270,15 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
                     </option>
                   ))}
                 </select>
+                {projects.length > 1 && (
+                  <a
+                    href="/board/all"
+                    class="text-[12px] text-muted mt-2 inline-flex items-center gap-1.5 hover:text-[color:var(--accent)]"
+                  >
+                    <i data-lucide="layout-dashboard" class="icon-sm"></i>
+                    All projects
+                  </a>
+                )}
               </div>
             )}
             <nav class="mt-6 flex flex-col gap-1">

@@ -14,6 +14,7 @@ import {
   BoardHeader,
   GoalsPage,
   Inbox,
+  MultiProjectView,
   Kanban,
   SettingsPage,
   SidebarAgents,
@@ -26,6 +27,7 @@ import {
   type GitCommit,
   type GoalRow,
   type KanbanTask,
+  type ProjectSummary,
 } from './views';
 import { Layout } from './layout';
 import { openPullRequest } from './pr-helper';
@@ -149,6 +151,43 @@ export function createApp(options: UiServerOptions): Hono {
   };
 
   app.get('/', (c) => c.redirect(`/board?project=${options.defaultProject}`));
+
+  app.get('/board/all', async (c) => {
+    const summaries: ProjectSummary[] = [];
+    for (const name of projectNames) {
+      try {
+        const db = openDb(name);
+        const taskRows = db
+          .prepare(
+            `SELECT status, COUNT(*) AS n FROM tasks WHERE status != 'done' GROUP BY status`,
+          )
+          .all() as Array<{ status: string; n: number }>;
+        const agentRows = db
+          .prepare(
+            `SELECT name, status FROM agent_state WHERE status != 'archived' ORDER BY name`,
+          )
+          .all() as Array<{ name: string; status: string }>;
+        db.close();
+        const presentations = await loadAgentPresentations(name);
+        const genderByName = new Map(presentations.map((p) => [p.name, p.gender]));
+        summaries.push({
+          name,
+          counts: Object.fromEntries(taskRows.map((r) => [r.status, r.n])),
+          agents: agentRows.map((a) => {
+            const gender = genderByName.get(a.name);
+            return gender ? { ...a, gender } : a;
+          }),
+        });
+      } catch (err) {
+        console.warn(`[board/all] skip ${name}:`, (err as Error).message);
+      }
+    }
+    return c.html(
+      <Layout project={''} projects={projectNames} title="All projects" page="board">
+        <MultiProjectView summaries={summaries} />
+      </Layout>,
+    );
+  });
 
   app.get('/board', async (c) => {
     const project = currentProject(c.req.raw);
