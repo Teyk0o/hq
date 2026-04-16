@@ -106,6 +106,8 @@ export class Scheduler {
     for (const name of agentNames) {
       const state = db.select().from(agentState).where(eq(agentState.name, name)).get();
       if (!state) continue;
+      // 'paused' and 'paused_quota' are both skipped — distinct so the UI
+      // can show a different badge and the scheduler can log a reason.
       if (state.status !== 'idle') continue;
       candidates.push({ name, tokens: state.tokensToday, last: state.lastHeartbeat ?? 0 });
     }

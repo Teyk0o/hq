@@ -275,12 +275,17 @@ export function createApp(options: UiServerOptions): Hono {
 
   app.get('/agents', async (c) => {
     const project = currentProject(c.req.raw);
+    const url = new URL(c.req.raw.url);
+    const showArchived = url.searchParams.get('archived') === '1';
     const db = openDb(project);
-    const states = db
-      .prepare(
-        'SELECT name, status, last_heartbeat, current_task_id, tokens_today, tokens_budget FROM agent_state ORDER BY name',
-      )
-      .all() as Array<{
+    const states = (showArchived
+      ? db.prepare(
+          'SELECT name, status, last_heartbeat, current_task_id, tokens_today, tokens_budget FROM agent_state ORDER BY name',
+        )
+      : db.prepare(
+          `SELECT name, status, last_heartbeat, current_task_id, tokens_today, tokens_budget FROM agent_state WHERE status != 'archived' ORDER BY name`,
+        )
+    ).all() as Array<{
       name: string;
       status: string;
       last_heartbeat: number | null;
@@ -297,9 +302,74 @@ export function createApp(options: UiServerOptions): Hono {
     });
     return c.html(
       <Layout project={project} projects={projectNames} title="Agents" page="agents">
-        <AgentsList agents={merged} />
+        <AgentsList agents={merged} project={project} showArchived={showArchived} />
       </Layout>,
     );
+  });
+
+  /** Update agent_state.status with a guard so callers can't put it into an
+   *  invalid state (e.g. trying to 'resume' something that was already
+   *  working). The UI surfaces the corresponding buttons based on current
+   *  status, so the guard is defence-in-depth. */
+  const mutateAgent = (
+    project: string,
+    agent: string,
+    mutation: (current: string) => { status: string; blocked_reason?: string | null } | null,
+  ): boolean => {
+    const db = openDb(project);
+    const row = db
+      .prepare('SELECT status FROM agent_state WHERE name = ?')
+      .get(agent) as { status: string } | undefined;
+    if (!row) {
+      db.close();
+      return false;
+    }
+    const next = mutation(row.status);
+    if (!next) {
+      db.close();
+      return false;
+    }
+    db.prepare(
+      `UPDATE agent_state SET status = ?, blocked_reason = ? WHERE name = ?`,
+    ).run(next.status, next.blocked_reason ?? null, agent);
+    db.close();
+    bus.publish({ type: 'agent.status_changed', agent, status: next.status });
+    return true;
+  };
+
+  app.post('/api/agents/:name/pause', (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const ok = mutateAgent(project, name, (s) =>
+      s === 'idle' || s === 'blocked' ? { status: 'paused' } : null,
+    );
+    return ok ? c.body(null, 204) : c.json({ error: 'cannot pause in current state' }, 409);
+  });
+
+  app.post('/api/agents/:name/resume', (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const ok = mutateAgent(project, name, (s) =>
+      s === 'paused' || s === 'blocked' ? { status: 'idle', blocked_reason: null } : null,
+    );
+    return ok ? c.body(null, 204) : c.json({ error: 'cannot resume in current state' }, 409);
+  });
+
+  app.post('/api/agents/:name/archive', (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const ok = mutateAgent(project, name, () => ({ status: 'archived' }));
+    if (ok) bus.publish({ type: 'agent.archived', agent: name });
+    return ok ? c.body(null, 204) : c.json({ error: 'agent not found' }, 404);
+  });
+
+  app.post('/api/agents/:name/restore', (c) => {
+    const name = c.req.param('name');
+    const project = currentProject(c.req.raw);
+    const ok = mutateAgent(project, name, (s) =>
+      s === 'archived' ? { status: 'idle' } : null,
+    );
+    return ok ? c.body(null, 204) : c.json({ error: 'not archived' }, 409);
   });
 
   app.get('/agents/sidebar', async (c) => {

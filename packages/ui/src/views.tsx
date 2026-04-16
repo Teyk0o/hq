@@ -750,8 +750,20 @@ export const AgentsList: FC<{
     tokens_today: number;
     tokens_budget: number;
   }>;
-}> = ({ agents }) => (
-  <div class="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+  project: string;
+  showArchived: boolean;
+}> = ({ agents, project, showArchived }) => (
+  <div>
+    <div class="flex items-center justify-end mb-4">
+      <a
+        href={`/agents?project=${project}${showArchived ? '' : '&archived=1'}`}
+        class="btn btn-sm"
+      >
+        <i data-lucide={showArchived ? 'eye-off' : 'eye'}></i>
+        {showArchived ? 'Hide archived' : 'Show archived'}
+      </a>
+    </div>
+    <div class="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
     {agents.length === 0 && (
       <p class="text-[13px] text-faint py-8 col-span-full text-center">No agents defined yet.</p>
     )}
@@ -812,9 +824,54 @@ export const AgentsList: FC<{
               </div>
             </div>
           )}
+          <div class="mt-4 flex items-center gap-2 border-t border-soft pt-3">
+            {a.status !== 'archived' && a.status !== 'paused' && (
+              <button
+                class="btn btn-sm"
+                hx-post={`/api/agents/${a.name}/pause?project=${project}`}
+                hx-swap="none"
+                title="Skip this agent on scheduler ticks until you resume"
+              >
+                <i data-lucide="pause"></i>
+                Pause
+              </button>
+            )}
+            {a.status === 'paused' && (
+              <button
+                class="btn btn-sm"
+                style="color: var(--accent)"
+                hx-post={`/api/agents/${a.name}/resume?project=${project}`}
+                hx-swap="none"
+              >
+                <i data-lucide="play"></i>
+                Resume
+              </button>
+            )}
+            {a.status === 'archived' ? (
+              <button
+                class="btn btn-sm"
+                hx-post={`/api/agents/${a.name}/restore?project=${project}`}
+                hx-swap="none"
+              >
+                <i data-lucide="archive-restore"></i>
+                Restore
+              </button>
+            ) : (
+              <button
+                class="btn btn-sm"
+                hx-post={`/api/agents/${a.name}/archive?project=${project}`}
+                hx-confirm={`Archive agent "${a.name}"?`}
+                hx-swap="none"
+              >
+                <i data-lucide="archive"></i>
+                Archive
+              </button>
+            )}
+          </div>
         </div>
       );
     })}
+    </div>
   </div>
 );
 

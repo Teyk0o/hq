@@ -14,7 +14,14 @@ export const TASK_STATES = [
 ] as const;
 export type TaskState = (typeof TASK_STATES)[number];
 
-export const AGENT_STATUSES = ['idle', 'working', 'blocked', 'archived', 'paused_quota'] as const;
+export const AGENT_STATUSES = [
+  'idle',
+  'working',
+  'blocked',
+  'archived',
+  'paused_quota',
+  'paused',
+] as const;
 export type AgentStatus = (typeof AGENT_STATUSES)[number];
 
 export const REVIEW_VERDICTS = ['approved', 'changes_requested'] as const;
