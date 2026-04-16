@@ -61,7 +61,52 @@ hq daemon start
 Alice claims a task, Bob reviews it, the task goes to `review` and waits
 for your approval in the UI. Click **Approve** then **Push** and it's out.
 
-## Real project
+## Let Claude set it up for you
+
+Open Claude Code in your project root and paste this prompt. Claude reads
+the reference doc, asks the right questions about your team and repo,
+then scaffolds `.hq/`, creates agents with real SOUL.md files, and
+suggests `[[rules]]` tailored to your folder layout.
+
+````markdown
+I just installed HQ (HeadQuarter — https://github.com/Teyk0o/hq).
+Set it up in this repo as my autonomous agent team.
+
+First, read this reference end-to-end:
+https://raw.githubusercontent.com/Teyk0o/hq/main/docs/CLAUDE.md
+
+It has the 16-tool MCP reference, the heartbeat protocol, the do/don't
+list, and a full 9-agent team template you can adapt.
+
+Before running any command, ask me:
+1. What shape of team fits my project (solo, pair, full, or custom — and
+   which disciplines: backend, frontend, mobile, platform, design,
+   marketing, QA, security, …).
+2. Which folders each agent should own (`scope.packages`), mapped to the
+   actual packages in this repo — don't invent any.
+3. What goals I want to hit this week, so the boss (if any) has
+   something to plan against.
+4. Any paths that must be off-limits (lock files, .env, CI, secrets).
+
+Then:
+- Run `hq init` in the repo root.
+- Create each agent with `hq agent new <name> --role <role>`.
+- Write a real SOUL.md for every agent based on my answers — not the
+  default placeholder. Use the templates in docs/GUIDE.md as a starting
+  point and adapt voice, stack, and non-negotiables to my project.
+- Edit `.hq/project.toml` to add `[[goals]]` and `[[rules]]` (ownership
+  per package, protected paths, bash allow/deny lists).
+- Print a short summary of what you set up, then tell me to start the
+  daemon with `hq daemon start`.
+
+Don't push any code. Don't start the daemon yourself. Just set it up.
+````
+
+If Claude doesn't have internet access in your setup, point it at the
+local copy instead: `~/.local/share/hq/docs/CLAUDE.md` (installed by
+`install.sh`).
+
+## Or set it up by hand
 
 ```bash
 cd ~/src/myproject
