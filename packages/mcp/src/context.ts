@@ -8,6 +8,8 @@ export interface McpContext {
   readonly agentName: string;
   readonly agentRole: AgentRole;
   readonly capabilities: AgentCapabilities;
+  /** Packages this agent is allowed to claim tasks for. Empty or ["*"] = any. */
+  readonly scopePackages: string[];
   readonly db: HQDatabase;
   readonly bus: EventBus;
   /** Current heartbeat id for this MCP session, set by start_heartbeat. */

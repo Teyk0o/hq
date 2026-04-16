@@ -651,6 +651,37 @@ export function createApp(options: UiServerOptions): Hono {
       `UPDATE tasks SET status = 'done', pushed = 1, pr_url = COALESCE(?, pr_url),
          completed_at = ?, updated_at = ? WHERE id = ?`,
     ).run(pr.url ?? null, Date.now(), Date.now(), id);
+
+    // Auto-unblock: any blocked task whose sole remaining dep was this one
+    // becomes claimable. We only demote to 'todo' if every declared dep is
+    // now 'done'; partial completion leaves it blocked.
+    const dependents = db
+      .prepare(
+        `SELECT task_id FROM task_dependencies WHERE depends_on = ?`,
+      )
+      .all(id) as Array<{ task_id: string }>;
+    const unblocked: string[] = [];
+    for (const dep of dependents) {
+      const remaining = db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM task_dependencies d
+             LEFT JOIN tasks t ON t.id = d.depends_on
+             WHERE d.task_id = ? AND COALESCE(t.status,'backlog') != 'done'`,
+        )
+        .get(dep.task_id) as { n: number };
+      if (remaining.n === 0) {
+        const target = db
+          .prepare(`SELECT status FROM tasks WHERE id = ?`)
+          .get(dep.task_id) as { status: string } | undefined;
+        if (target?.status === 'blocked') {
+          db.prepare(
+            `UPDATE tasks SET status = 'todo', blocked_reason = NULL, updated_at = ? WHERE id = ?`,
+          ).run(Date.now(), dep.task_id);
+          unblocked.push(dep.task_id);
+        }
+      }
+    }
+
     db.close();
     bus.publish({ type: 'task.pushed', task_id: id, branch: task.branch });
     bus.publish({
@@ -660,6 +691,16 @@ export function createApp(options: UiServerOptions): Hono {
       to: 'done',
       by: 'human',
     });
+    for (const uid of unblocked) {
+      bus.publish({ type: 'task.unblocked', task_id: uid });
+      bus.publish({
+        type: 'task.status_changed',
+        task_id: uid,
+        from: 'blocked',
+        to: 'todo',
+        by: 'daemon',
+      });
+    }
     return c.body(null, 204);
   });
 

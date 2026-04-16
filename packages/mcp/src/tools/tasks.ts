@@ -4,6 +4,7 @@ import {
   comments as commentsTable,
   newId,
   reviews as reviewsTable,
+  taskDependencies as taskDependenciesTable,
   tasks as tasksTable,
   type TaskState,
 } from '@hq/core';
@@ -88,6 +89,38 @@ export async function claimTask(ctx: McpContext, input: { id: string }) {
   );
   if (!transition.ok) {
     throw new McpError('invalid_transition', transition.reason);
+  }
+
+  // Package scope: if the agent's scope.packages is set (and not "*"), only
+  // allow claiming tasks whose package is in that list. Tasks without a
+  // package are open to any agent.
+  if (
+    preTask.package &&
+    ctx.scopePackages.length > 0 &&
+    !ctx.scopePackages.includes('*') &&
+    !ctx.scopePackages.includes(preTask.package)
+  ) {
+    throw new McpError(
+      'out_of_scope',
+      `Task package "${preTask.package}" is not in ${ctx.agentName}'s scope (${ctx.scopePackages.join(', ')})`,
+      { task_package: preTask.package, agent_scope: ctx.scopePackages },
+    );
+  }
+
+  // Task dependencies: every dep must be done before this task is claimable.
+  const unmet = ctx.db
+    .select()
+    .from(taskDependenciesTable)
+    .leftJoin(tasksTable, eq(taskDependenciesTable.dependsOn, tasksTable.id))
+    .where(eq(taskDependenciesTable.taskId, input.id))
+    .all()
+    .filter((row) => (row.tasks?.status ?? 'backlog') !== 'done');
+  if (unmet.length > 0) {
+    throw new McpError(
+      'deps_not_met',
+      `Task has ${unmet.length} unmet dependency(ies)`,
+      { unmet: unmet.map((u) => u.task_dependencies.dependsOn) },
+    );
   }
 
   const now = Date.now();
