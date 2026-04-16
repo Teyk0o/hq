@@ -68,7 +68,7 @@
 
 - [x] **39. Discord webhook** — code écrit, jamais testé. *(bus subscriber POST embed Discord pour chaque event configuré dans project.toml, fire-and-forget)*
 - [x] **40. Browser Notification API** — toast only pour l'instant. *(bouton sidebar, permission persistée localStorage, notifs sur review/blocked/message quand tab hors focus)*
-- [ ] **41. Digest quotidien** — résumé de la journée d'agents.
+- [x] **41. Digest quotidien** — résumé de la journée d'agents.
 
 ## 🟢 Polish / nice-to-have pour une v1
 
@@ -97,22 +97,22 @@
 ### Documentation
 
 - [x] **55. README utilisateur** — actuellement scaffold-level.
-- [x] **56. Guide d'onboarding projet** — comment créer un SOUL.md efficace. *(docs/SOUL-templates.md)*
-- [x] **57. Exemples de templates SOUL.md** — boss, worker, reviewer, devil's advocate. *(docs/SOUL-templates.md)*
-- [x] **58. Troubleshooting** — erreurs courantes (bwrap userns, tmux, mcp.json). *(section dans README.md)*
-- [ ] **59. DESIGN.md public** avec captures d'écran.
+- [x] **56. Guide d'onboarding projet** — comment créer un SOUL.md efficace. *(docs/GUIDE.md + docs/CLAUDE.md)*
+- [x] **57. Exemples de templates SOUL.md** — boss, worker, reviewer, devil's advocate. *(absorbés dans docs/GUIDE.md)*
+- [x] **58. Troubleshooting** — erreurs courantes (bwrap userns, tmux, mcp.json). *(section dans docs/GUIDE.md)*
+- [x] **59. DESIGN.md public** avec captures d'écran.
 
 ### Tests
 
 - [x] **60. 0 test automatisé aujourd'hui** — au minimum : state machine, rules engine, TOML parsers. *(39 tests bun:test sur domain, rules, config, avatar)*
 - [x] **61. Smoke test scripté** — `hq debug test` est manuel. *(hq debug test --reset joue scenario complet)*
 - [x] **62. CI GitHub Actions** — typecheck + tests. *(.github/workflows/ci.yml : pnpm install + typecheck + bun test)*
-- [ ] **63. Integration test** — spawn un projet dummy, lancer un agent fake, vérifier la DB.
+- [x] **63. Integration test** — spawn un projet dummy, lancer un agent fake, vérifier la DB.
 
 ### Perf
 
-- [ ] **64. DB pooling UI** — `new Database()` par requête, OK pour quelques utilisateurs, limitant au-delà.
-- [ ] **65. SSE fanout optimization** — un seul `EventEmitter`, peut bloquer avec N clients.
+- [x] **64. DB pooling UI** — `new Database()` par requête, OK pour quelques utilisateurs, limitant au-delà.
+- [x] **65. SSE fanout optimization** — un seul `EventEmitter`, peut bloquer avec N clients.
 
 ---
 
@@ -233,7 +233,7 @@ utilisateur, tests unitaires, CI GitHub Actions.
 - **53. Migration path** — versioning du schema via une table `meta`,
   migrations générées par drizzle-kit dans `@hq/core/src/db/migrations/`.
 
-### ⏳ Sprint K — Tests, perf, polish final (5 items)
+### ✅ Sprint K — Tests, perf, polish final (5 items)
 
 > Objectif : passer les 39 tests unitaires à une vraie suite + perf.
 
@@ -254,8 +254,7 @@ utilisateur, tests unitaires, CI GitHub Actions.
 
 ## Totaux
 
-- Items faits : 31
-- Items restants : 34
-- Sprints restants : 7 (E à K)
-- Estimation : ~2-3h chacun, soit ~15-21h pour boucler la v1
+- Items faits : 65 (tous les items MVP → v1)
+- Sprints restants : 0 — v1 scope complet
+- Suite v1.x : voir backlog d'issues
 
