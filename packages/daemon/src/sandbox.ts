@@ -57,6 +57,12 @@ export function buildClaudeLaunchCommand(
     // The worktree is a subdir of projectRoot so a single bind covers both.
     '--bind', projectRoot, projectRoot,
     '--bind', `${home}/.claude`, `${home}/.claude`,
+    // Overlay the credentials file as read-only on top of the writable
+    // ~/.claude bind. Claude still reads it normally (auth works) but the
+    // agent cannot overwrite or tamper with the OAuth token. --ro-bind-try
+    // means this is skipped silently on fresh installs that haven't logged
+    // in yet (so tests don't need fake creds).
+    '--ro-bind-try', `${home}/.claude/.credentials.json`, `${home}/.claude/.credentials.json`,
     // ~/.claude.json is a sibling file (not inside ~/.claude/). Claude Code writes
     // to it to persist trust/onboarding state; without a writable bind, the TUI
     // hangs silently on its first write attempt.
