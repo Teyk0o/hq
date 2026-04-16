@@ -77,7 +77,7 @@
 - [x] **42. Load balancing** — éviter qu'un agent prenne toutes les tasks. *(scheduler trie les idle par tokens_today asc + last_heartbeat asc, les plus "froids" passent en premier)*
 - [x] **43. Agent capabilities check** — si un agent n'a pas les tools requis par la task, pas assignable. *(scope.packages agent vs task.package, claim refuse avec McpError 'out_of_scope')*
 - [x] **44. Dépendances de tasks** — `blocked` quand dep pas done, auto-unblock. *(claim refuse si dep pas done, push auto-unblock les dépendants dont toutes les deps sont done)*
-- [ ] **45. Stop propre d'un agent** — `hq agent stop` (kill tmux + mark idle).
+- [x] **45. Stop propre d'un agent** — `hq agent stop` (kill tmux + mark idle). *(kill tmux, unclaim task in-progress, set idle si working — préserve paused/archived)*
 
 ### Sécurité (défense en profondeur)
 
@@ -88,10 +88,10 @@
 
 ### Déploiement
 
-- [ ] **50. systemd service testé** — le fichier est généré mais jamais exercé.
-- [ ] **51. Packaging binaire** (`bun build --compile`) pour distribution sans node_modules.
-- [ ] **52. Backup auto** de `~/.hq/registry.sqlite` + project DBs.
-- [ ] **53. Migration path** entre versions HQ (schema DB qui évolue).
+- [x] **50. systemd service testé** — le fichier est généré mais jamais exercé. *(install-service résout hq via `which`, crée ~/.hq/, nouvelle cmd `hq daemon status` wrappe systemctl --user)*
+- [x] **51. Packaging binaire** (`bun build --compile`) pour distribution sans node_modules. *(pnpm build:bin → dist/hq 98MB, smoke-test OK)*
+- [x] **52. Backup auto** de `~/.hq/registry.sqlite` + project DBs. *(daemon cron 03:17 + kickoff à +30s ; ~/.hq/backups/YYYY-MM-DD/ avec WAL+SHM, prune après 14 jours)*
+- [x] **53. Migration path** entre versions HQ (schema DB qui évolue). *(table meta + CURRENT_SCHEMA_VERSION, MIGRATIONS ordonnée, idempotent via tryExec, applique depuis la version recordée)*
 - [x] **54. Mobile-friendly UI** — sidebar collapse sur petit écran. *(media query <900px : sidebar devient overlay slidable via bouton menu, drawer en pleine largeur, header tightened)*
 
 ### Documentation
@@ -218,7 +218,7 @@ utilisateur, tests unitaires, CI GitHub Actions.
   agent.toml qui force même les `Write`/`Edit` à passer par rules-gate
   avec un refus global.
 
-### ⏳ Sprint J — Ops & packaging (5 items)
+### ✅ Sprint J — Ops & packaging (5 items)
 
 > Objectif : déployable, upgradable, sauvegardable.
 

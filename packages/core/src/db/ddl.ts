@@ -7,7 +7,19 @@
  * by IF NOT EXISTS / try-catch patterns) rather than editing the CREATE TABLE
  * blocks — existing DBs won't re-create.
  */
+/**
+ * Current schema version, bumped every time a NEW additive ALTER lands in
+ * client.ts. Persisted in the meta table and checked on open so we can log
+ * when a DB was upgraded.
+ */
+export const CURRENT_SCHEMA_VERSION = 2;
+
 export const SCHEMA_DDL = `
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   goal_id TEXT,

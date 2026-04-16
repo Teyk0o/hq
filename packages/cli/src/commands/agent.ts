@@ -2,8 +2,15 @@ import { mkdir, writeFile, access, readdir } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
-import { openProjectDb } from '@hq/core';
+import { spawn } from 'node:child_process';
+import {
+  agentState,
+  loadProjectConfig,
+  openProjectDb,
+  tasks as tasksTable,
+} from '@hq/core';
 import { triggerHeartbeat } from '@hq/daemon';
+import { and, eq } from 'drizzle-orm';
 import { resolveProjectPath } from '../util';
 
 const DEFAULT_TOML = (name: string, role: string, gender?: string) => `[agent]
@@ -106,6 +113,58 @@ export async function agentRestore(name: string): Promise<void> {
   db.prepare(`UPDATE agent_state SET status = 'idle' WHERE name = ?`).run(name);
   db.close();
   console.log(`✓ Agent "${name}" restored.`);
+}
+
+/**
+ * Forcefully stop an agent: kill its tmux session, unclaim its in-progress
+ * task, mark it idle. Useful when an agent is stuck and you want to restart
+ * cleanly without waiting for the reaper. Respects the pause contract: if the
+ * agent was paused or archived, we don't touch its status — we just kill the
+ * tmux session.
+ */
+export async function agentStop(name: string): Promise<void> {
+  const projectPath = resolveProjectPath();
+  const project = await loadProjectConfig(join(projectPath, '.hq', 'project.toml'));
+  const slug = project.project.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const session = `hq-${slug}-${name}`;
+
+  // Kill tmux first so no in-flight MCP call writes to DB after we clean up.
+  await new Promise<void>((resolve) => {
+    const proc = spawn('tmux', ['kill-session', '-t', session], { stdio: 'ignore' });
+    proc.on('close', () => resolve());
+    proc.on('error', () => resolve());
+  });
+
+  const db = openProjectDb(join(projectPath, '.hq', 'db.sqlite'));
+  const state = db.select().from(agentState).where(eq(agentState.name, name)).get();
+  if (!state) {
+    console.error(`Agent "${name}" not found.`);
+    process.exit(1);
+  }
+
+  db.transaction((tx) => {
+    tx.update(tasksTable)
+      .set({ status: 'todo', assignee: null, updatedAt: Date.now() })
+      .where(and(eq(tasksTable.assignee, name), eq(tasksTable.status, 'in_progress')))
+      .run();
+    // Preserve paused/archived intent; only flip to idle from working.
+    if (state.status === 'working') {
+      tx.update(agentState)
+        .set({ status: 'idle', tmuxSession: null, currentTaskId: null })
+        .where(eq(agentState.name, name))
+        .run();
+    } else {
+      tx.update(agentState)
+        .set({ tmuxSession: null })
+        .where(eq(agentState.name, name))
+        .run();
+    }
+  });
+
+  console.log(`✓ Agent "${name}" stopped. tmux session killed, task unclaimed.`);
 }
 
 export async function agentRun(name: string): Promise<void> {

@@ -13,6 +13,7 @@
   ],
   "scripts": {
     "build": "pnpm -r build",
+    "build:bin": "bun build packages/cli/src/bin.ts --compile --outfile dist/hq",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",
     "format": "biome format --write .",

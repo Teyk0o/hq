@@ -7,11 +7,12 @@ import {
   agentNew,
   agentRestore,
   agentRun,
+  agentStop,
 } from './commands/agent';
 import { bashGateCommand } from './commands/bash-gate';
 import { rulesGateCommand } from './commands/rules-gate';
 import { debugReset, debugTest } from './commands/debug';
-import { daemonInstallService, daemonStart } from './commands/daemon';
+import { daemonInstallService, daemonStart, daemonStatus } from './commands/daemon';
 import { initCommand } from './commands/init';
 import { mcpCommand } from './commands/mcp';
 import { taskAdd, taskList, taskShow, taskUnblock } from './commands/task';
@@ -59,6 +60,10 @@ agent
   .description('Trigger a heartbeat immediately (manual)')
   .action(agentRun);
 agent
+  .command('stop <name>')
+  .description('Kill the agent tmux session and unclaim its in-progress task')
+  .action(agentStop);
+agent
   .command('attach <name>')
   .description('Print the tmux attach command for this agent')
   .action(agentAttach);
@@ -94,6 +99,10 @@ daemon
   .command('install-service')
   .description('Write a systemd user unit for the daemon')
   .action(daemonInstallService);
+daemon
+  .command('status')
+  .description('Show systemd --user status for the hq service')
+  .action(daemonStatus);
 
 // Usage
 program
