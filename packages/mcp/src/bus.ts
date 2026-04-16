@@ -12,6 +12,12 @@ export class EventBus {
   private readonly sinkUrl: string | null;
 
   constructor() {
+    // Node's EventEmitter warns at 10 listeners by default. SSE clients + UI
+    // subscribers + Discord forwarder + the UI bus re-publisher can comfortably
+    // exceed that even in single-user local mode. Raising to 200 keeps us
+    // out of warning territory with plenty of headroom; a legitimate leak
+    // would still scream long before we hit the new ceiling.
+    this.emitter.setMaxListeners(200);
     this.sinkUrl = process.env.HQ_EVENT_SINK_URL ?? null;
   }
 

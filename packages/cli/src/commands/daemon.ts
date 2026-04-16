@@ -6,6 +6,7 @@ import {
   QuotaPoller,
   Scheduler,
   installDailyBackup,
+  installDailyDigest,
   installEventTriggers,
   installProjectWebhooks,
   reapOrphanedTmuxSessions,
@@ -90,6 +91,14 @@ export async function daemonStart(): Promise<void> {
     }
   }
   installProjectWebhooks(bus, webhookConfigs);
+
+  // 21:00 local: summarise each project's day in a Discord embed.
+  installDailyDigest({
+    projects: webhookConfigs.map(({ name, config }) => {
+      const p = projects.find((x) => x.name === name)!;
+      return { name, path: p.path, discordUrl: config.webhook.discord_url };
+    }),
+  });
 
   // Daily SQLite snapshots of registry + every project DB under ~/.hq/backups.
   installDailyBackup({ projects });

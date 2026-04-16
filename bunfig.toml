@@ -1,2 +1,8 @@
 jsx = "react-jsx"
 jsxImportSource = "hono/jsx"
+
+[test]
+# E2E tests spawn MCP subprocesses for every scenario. Under parallel load
+# the Bun cold-start + drizzle init can push a single test past the default
+# 5s timeout. 30s gives comfortable headroom without masking real hangs.
+timeout = 30_000

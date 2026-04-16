@@ -17,7 +17,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "test": "bun test packages/*/test"
+    "test": "bun test --timeout 30000 --max-concurrency 1 packages/*/test"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

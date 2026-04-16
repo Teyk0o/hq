@@ -8,6 +8,7 @@ export { reapOrphanedTmuxSessions } from './reaper';
 export { installEventTriggers } from './triggers';
 export { installDiscordWebhook, installProjectWebhooks } from './webhooks';
 export { installDailyBackup } from './backup';
+export { installDailyDigest } from './digest';
 export { buildHeartbeatPrompt } from './heartbeat';
 export { Scheduler, lastTickAtMap, type ProjectEntry, type SchedulerOptions } from './scheduler';
 export { QuotaPoller, type QuotaListener } from './quota';
