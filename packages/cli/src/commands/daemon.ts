@@ -23,6 +23,10 @@ export async function daemonStart(): Promise<void> {
   const global = await loadGlobalConfig(join(homedir(), '.hq', 'config.toml'));
   const bus = getSharedBus();
 
+  // Track quota pause state changes so we emit daemon.quota_paused and
+  // daemon.quota_resumed only on actual transitions (not on every tick that
+  // happens to be above threshold).
+
   // Clean up any tmux sessions orphaned by a previous daemon run before we
   // start scheduling new ticks.
   try {
@@ -38,17 +42,31 @@ export async function daemonStart(): Promise<void> {
   }
 
   const scheduler = new Scheduler();
-  const quotaPoller = new QuotaPoller(global.claude_usage, (snap) => {
-    console.log(
-      `[quota] session=${snap.session_pct}% week=${snap.week_all_pct}% sonnet=${snap.week_sonnet_pct}%`,
-    );
-    bus.publish({
-      type: 'claude.usage_updated',
-      session_pct: snap.session_pct,
-      week_all_pct: snap.week_all_pct,
-      week_sonnet_pct: snap.week_sonnet_pct,
-    });
-  });
+  const quotaPoller = new QuotaPoller(
+    global.claude_usage,
+    (snap) => {
+      console.log(
+        `[quota] session=${snap.session_pct}% week=${snap.week_all_pct}% sonnet=${snap.week_sonnet_pct}%`,
+      );
+      bus.publish({
+        type: 'claude.usage_updated',
+        session_pct: snap.session_pct,
+        week_all_pct: snap.week_all_pct,
+        week_sonnet_pct: snap.week_sonnet_pct,
+      });
+    },
+    (change) => {
+      if (change.kind === 'paused') {
+        console.warn(
+          `[quota] pausing agents: ${change.reason} usage at ${change.pct}%`,
+        );
+        bus.publish({ type: 'daemon.quota_paused', week_all_pct: change.pct });
+      } else {
+        console.log('[quota] resuming agents: quota back below threshold');
+        bus.publish({ type: 'daemon.quota_resumed' });
+      }
+    },
+  );
 
   await quotaPoller.start();
   await scheduler.start({
