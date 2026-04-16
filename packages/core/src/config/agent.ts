@@ -9,6 +9,14 @@ export const AgentConfigSchema = z.object({
     soul: z.string().default(''),
     active: z.boolean().default(true),
     readonly: z.boolean().default(false),
+    /**
+     * When true, rules-gate refuses every Edit/Write/MultiEdit/NotebookEdit
+     * call regardless of project [[rules]]. Stronger than role='readonly'
+     * because it enforces at the hook level, not just the MCP capability
+     * layer, so an agent that bypasses capability checks (e.g. via Bash)
+     * still cannot write to files.
+     */
+    readonly_strict: z.boolean().default(false),
     /** Optional presentation-only hint used to bias the avatar seed. */
     gender: z.enum(['female', 'male', 'neutral']).optional(),
   }),

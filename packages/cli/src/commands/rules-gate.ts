@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { evaluateRules, loadProjectConfig } from '@hq/core';
+import { evaluateRules, loadAgentConfig, loadProjectConfig } from '@hq/core';
 
 /**
  * Claude Code PreToolUse hook for Edit / Write / MultiEdit. Reads the tool
@@ -37,6 +37,27 @@ export async function rulesGateCommand(opts: {
       `HQ rules-gate: project.toml unreadable — ${(err as Error).message}\n`,
     );
     process.exit(2);
+  }
+
+  // readonly_strict: refuse all file-editing tool calls regardless of rules.
+  // We only enforce this for write-class tools; read-only probes like Read
+  // / Grep / Glob never hit this hook in the first place (matcher is scoped
+  // to Edit|Write|MultiEdit|NotebookEdit).
+  try {
+    const agentCfg = await loadAgentConfig(
+      join(opts.project, '.hq', 'agents', `${opts.agent}.toml`),
+    );
+    if (agentCfg.agent.readonly_strict) {
+      process.stderr.write(
+        `HQ rules-gate: agent "${opts.agent}" is in readonly_strict mode. ` +
+          `Writes are not allowed.\n  tool: ${toolName}\n  target: ${filePath ?? '(none)'}\n`,
+      );
+      process.exit(2);
+    }
+  } catch {
+    // If we can't read the agent config, fall through — the project-level
+    // rules still apply, and we'd rather not false-positive on a config
+    // glitch for a non-readonly agent.
   }
 
   const verdict = evaluateRules({
