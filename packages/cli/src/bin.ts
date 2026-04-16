@@ -48,7 +48,8 @@ agent
   .command('new <name>')
   .description('Scaffold a new agent (TOML + SOUL.md)')
   .option('-r, --role <role>', 'role (boss|worker|reviewer|readonly)', 'worker')
-  .action(async (name: string, opts: { role?: string }) => agentNew(name, opts));
+  .option('-g, --gender <gender>', 'presentation hint for avatar (female|male|neutral)')
+  .action(async (name: string, opts: { role?: string; gender?: string }) => agentNew(name, opts));
 agent.command('list').description('List agents and their status').action(agentList);
 agent.command('archive <name>').description('Soft-delete an agent').action(agentArchive);
 agent.command('restore <name>').description('Restore an archived agent').action(agentRestore);

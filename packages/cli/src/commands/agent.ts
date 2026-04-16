@@ -6,13 +6,13 @@ import { openProjectDb } from '@hq/core';
 import { triggerHeartbeat } from '@hq/daemon';
 import { resolveProjectPath } from '../util';
 
-const DEFAULT_TOML = (name: string, role: string) => `[agent]
+const DEFAULT_TOML = (name: string, role: string, gender?: string) => `[agent]
 name = "${name}"
 role = "${role}"
 # model = "sonnet"  # uncomment to override project default
 soul = "${name}.md"
 active = true
-readonly = ${role === 'readonly' ? 'true' : 'false'}
+readonly = ${role === 'readonly' ? 'true' : 'false'}${gender ? `\ngender = "${gender}"` : ''}
 
 # [capabilities]
 # can_review = true
@@ -35,12 +35,18 @@ Describe this agent's mission, personality, tone, and project-specific rules her
 This text is injected verbatim into every heartbeat prompt.
 `;
 
-export async function agentNew(name: string, opts: { role?: string }): Promise<void> {
+export async function agentNew(
+  name: string,
+  opts: { role?: string; gender?: string },
+): Promise<void> {
   const projectPath = resolveProjectPath();
   const agentsDir = join(projectPath, '.hq', 'agents');
   await mkdir(agentsDir, { recursive: true });
 
   const role = opts.role ?? 'worker';
+  const gender = opts.gender && ['female', 'male', 'neutral'].includes(opts.gender)
+    ? opts.gender
+    : undefined;
   const tomlPath = join(agentsDir, `${name}.toml`);
   const mdPath = join(agentsDir, `${name}.md`);
   if (await exists(tomlPath)) {
@@ -48,7 +54,7 @@ export async function agentNew(name: string, opts: { role?: string }): Promise<v
     process.exit(1);
   }
 
-  await writeFile(tomlPath, DEFAULT_TOML(name, role), 'utf-8');
+  await writeFile(tomlPath, DEFAULT_TOML(name, role, gender), 'utf-8');
   await writeFile(mdPath, DEFAULT_SOUL(name, role), 'utf-8');
 
   // Register in agent_state so daemon sees it on next tick.

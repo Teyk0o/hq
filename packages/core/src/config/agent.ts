@@ -9,6 +9,8 @@ export const AgentConfigSchema = z.object({
     soul: z.string().default(''),
     active: z.boolean().default(true),
     readonly: z.boolean().default(false),
+    /** Optional presentation-only hint used to bias the avatar seed. */
+    gender: z.enum(['female', 'male', 'neutral']).optional(),
   }),
   capabilities: z
     .object({

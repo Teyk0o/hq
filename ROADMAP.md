@@ -28,7 +28,7 @@
 - [ ] **12. Link branche ↔ task** — MCP `submit_for_review` devrait forcer que la branche soit bien `agent/<name>/task-<id>` et que la task ait des commits.
 - [ ] **13. Push avec auth** — aujourd'hui `git push` naïf ; SSH keys du sandbox sont lisibles mais pas testés sous bwrap.
 - [ ] **14. PR/MR auto sur `approved`** — ou au moins bouton qui ouvre l'URL GitLab/GitHub.
-- [ ] **15. Diff / git log dans le drawer** — tu ne peux pas voir le code produit sans `cd worktrees/agent && git log`.
+- [x] **15. Diff / git log dans le drawer** — tu ne peux pas voir le code produit sans `cd worktrees/agent && git log`.
 - [ ] **16. Gestion conflits** — quand `main` a avancé pendant qu'un agent bossait, que fait-on ?
 
 ### Stabilité
@@ -42,19 +42,19 @@
 
 ### UI / UX manquants
 
-- [ ] **21. Création de task dans l'UI** — CLI only aujourd'hui.
+- [x] **21. Création de task dans l'UI** — CLI only aujourd'hui.
 - [ ] **22. Édition de goals dans l'UI**.
-- [ ] **23. Filtres board** (par assignee, priority, package, goal).
-- [ ] **24. Search** (par titre ou ID).
-- [ ] **25. Comments humains** — peut review mais pas commenter.
+- [x] **23. Filtres board** (par assignee, priority, package, goal).
+- [x] **24. Search** (par titre ou ID). *(search par titre via input `search`, ID au hover)*
+- [x] **25. Comments humains** — peut review mais pas commenter.
 - [ ] **26. Pause/resume par agent** (pas que global).
 - [ ] **27. Archived agents filter** — une fois archivé, introuvable dans l'UI.
 - [ ] **28. Vue multi-projets** (`/board/all`) — mentionnée DESIGN, pas codée.
 - [ ] **29. Settings page** — voir la config compilée, éditer les seuils.
 - [ ] **30. Dashboard metrics** (throughput, tokens/projet/semaine, velocity).
 - [ ] **31. Loading skeletons** au lieu de "loading…".
-- [ ] **32. Error toasts** quand une action HTMX foire.
-- [ ] **33. Inbox messages inter-agents** — `send_message` marche côté MCP, pas de vue UI.
+- [x] **32. Error toasts** quand une action HTMX foire.
+- [x] **33. Inbox messages inter-agents** — `send_message` marche côté MCP, pas de vue UI.
 
 ### Observabilité
 

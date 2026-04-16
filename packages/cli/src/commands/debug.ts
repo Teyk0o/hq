@@ -154,14 +154,34 @@ Heartbeat order:
 `,
 };
 
-function parseAgentsSpec(spec: string): Array<{ name: string; role: string }> {
+interface AgentSpec {
+  name: string;
+  role: string;
+  gender?: 'female' | 'male' | 'neutral';
+}
+
+function parseAgentsSpec(spec: string): AgentSpec[] {
+  // Name-based gender heuristics for the default demo roster so the avatars
+  // feel coherent out of the box. Not a real inference layer — only used when
+  // the spec doesn't carry an explicit gender.
+  const GENDER_HINTS: Record<string, 'female' | 'male' | 'neutral'> = {
+    alice: 'female', arya: 'female', daenerys: 'female', sansa: 'female',
+    morgane: 'female', claire: 'female', sofia: 'female', inès: 'female', ines: 'female',
+    bob: 'male', jon: 'male', tyrion: 'male', varys: 'male', sandor: 'male',
+    lucas: 'male', karim: 'male', thomas: 'male',
+  };
   return spec
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
-    .map((entry) => {
-      const [name, role = 'worker'] = entry.split(':').map((s) => s.trim());
-      return { name: name!, role };
+    .map((entry): AgentSpec => {
+      const parts = entry.split(':').map((s) => s.trim());
+      const [name, role = 'worker', explicitGender] = parts;
+      const gender =
+        explicitGender && ['female', 'male', 'neutral'].includes(explicitGender)
+          ? (explicitGender as 'female' | 'male' | 'neutral')
+          : GENDER_HINTS[name!.toLowerCase()];
+      return gender ? { name: name!, role, gender } : { name: name!, role };
     });
 }
 
@@ -204,7 +224,7 @@ export async function debugTest(opts: DebugTestOpts): Promise<void> {
 
   const { agentNew } = await import('./agent');
   for (const spec of agentSpecs) {
-    await agentNew(spec.name, { role: spec.role });
+    await agentNew(spec.name, spec.gender ? { role: spec.role, gender: spec.gender } : { role: spec.role });
     const soulBuilder = SOUL_TEMPLATES[spec.role] ?? SOUL_TEMPLATES.worker!;
     await writeFile(
       join(path, '.hq', 'agents', `${spec.name}.md`),

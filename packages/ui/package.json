@@ -13,6 +13,7 @@
     "@hq/core": "workspace:*",
     "@hq/mcp": "workspace:*",
     "@hq/usage": "workspace:*",
-    "hono": "^4.6.0"
+    "hono": "^4.6.0",
+    "smol-toml": "^1.3.0"
   }
 }
