@@ -41,49 +41,51 @@ export const FilterBar: FC<{
   assignees: string[];
   packages: string[];
 }> = ({ filters, project, assignees, packages }) => {
-  const qs = (override: Partial<Filters>): string => {
+  // Build the query string without the surrounding /board? path — the pills
+  // do an HTMX GET against /board/inner?... and use hx-push-url to rewrite
+  // the visible URL to /board?... so navigation stays lightweight (no
+  // full-page reload, just a swap of the kanban grid).
+  const params = (override: Partial<Filters>): string => {
     const merged = { ...filters, ...override };
-    const params = new URLSearchParams();
-    params.set('project', project);
-    if (merged.assignee) params.set('assignee', merged.assignee);
-    if (merged.priority) params.set('priority', String(merged.priority));
-    if (merged.package) params.set('package', merged.package);
-    if (merged.search) params.set('search', merged.search);
-    return `/board?${params.toString()}`;
+    const p = new URLSearchParams();
+    p.set('project', project);
+    if (merged.assignee) p.set('assignee', merged.assignee);
+    if (merged.priority) p.set('priority', String(merged.priority));
+    if (merged.package) p.set('package', merged.package);
+    if (merged.search) p.set('search', merged.search);
+    return p.toString();
   };
   const hasFilter = !!(filters.assignee || filters.priority || filters.package || filters.search);
+  const pill = (active: boolean, override: Partial<Filters>, label: string) => {
+    const qs = params(override);
+    return (
+      <button
+        type="button"
+        class={`pill ${active ? 'pill-active' : ''}`}
+        hx-get={`/board/inner?${qs}`}
+        hx-target="#board"
+        hx-swap="innerHTML"
+        hx-push-url={`/board?${qs}`}
+      >
+        {label}
+      </button>
+    );
+  };
   return (
     <div class="flex flex-wrap items-center gap-2">
-      <a href={qs({ assignee: undefined, priority: undefined, package: undefined, search: undefined })} class={`pill ${!hasFilter ? 'pill-active' : ''}`}>
-        All
-      </a>
-      {assignees.length > 0 && <span class="text-faint text-[11px]">·</span>}
-      {assignees.map((a) => (
-        <a
-          href={qs({ assignee: filters.assignee === a ? undefined : a })}
-          class={`pill ${filters.assignee === a ? 'pill-active' : ''}`}
-        >
-          @{a}
-        </a>
-      ))}
-      <span class="text-faint text-[11px]">·</span>
-      {[1, 2, 3, 4, 5].map((p) => (
-        <a
-          href={qs({ priority: filters.priority === p ? undefined : p })}
-          class={`pill ${filters.priority === p ? 'pill-active' : ''}`}
-        >
-          P{p}
-        </a>
-      ))}
-      {packages.length > 0 && <span class="text-faint text-[11px]">·</span>}
-      {packages.map((p) => (
-        <a
-          href={qs({ package: filters.package === p ? undefined : p })}
-          class={`pill ${filters.package === p ? 'pill-active' : ''}`}
-        >
-          {p}
-        </a>
-      ))}
+      {pill(!hasFilter, { assignee: undefined, priority: undefined, package: undefined, search: undefined }, 'All')}
+      {assignees.length > 0 && <span class="text-faint text-[12px]">·</span>}
+      {assignees.map((a) =>
+        pill(filters.assignee === a, { assignee: filters.assignee === a ? undefined : a }, `@${a}`),
+      )}
+      <span class="text-faint text-[12px]">·</span>
+      {[1, 2, 3, 4, 5].map((p) =>
+        pill(filters.priority === p, { priority: filters.priority === p ? undefined : p }, `P${p}`),
+      )}
+      {packages.length > 0 && <span class="text-faint text-[12px]">·</span>}
+      {packages.map((p) =>
+        pill(filters.package === p, { package: filters.package === p ? undefined : p }, p),
+      )}
     </div>
   );
 };
@@ -93,41 +95,52 @@ export const BoardHeader: FC<{
   filters: Filters;
   assignees: string[];
   packages: string[];
-}> = ({ project, filters, assignees, packages }) => (
-  <div class="flex items-center justify-between gap-4 mb-6 flex-wrap">
-    <FilterBar filters={filters} project={project} assignees={assignees} packages={packages} />
-    <div class="flex items-center gap-2.5 shrink-0">
-      <form action="/board" method="get" class="flex items-center">
-        <input type="hidden" name="project" value={project} />
-        {filters.assignee && <input type="hidden" name="assignee" value={filters.assignee} />}
-        {filters.priority && <input type="hidden" name="priority" value={String(filters.priority)} />}
-        {filters.package && <input type="hidden" name="package" value={filters.package} />}
-        <div class="relative">
+}> = ({ project, filters, assignees, packages }) => {
+  // Pre-build the current filter state for the search's hx-include so typing
+  // keeps existing pill selections intact.
+  const sharedParams = new URLSearchParams();
+  sharedParams.set('project', project);
+  if (filters.assignee) sharedParams.set('assignee', filters.assignee);
+  if (filters.priority) sharedParams.set('priority', String(filters.priority));
+  if (filters.package) sharedParams.set('package', filters.package);
+
+  return (
+    <div class="flex items-center justify-between gap-4 mb-6 flex-wrap">
+      <FilterBar filters={filters} project={project} assignees={assignees} packages={packages} />
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="relative" style="width: 260px">
           <i
             data-lucide="search"
             class="icon-sm"
-            style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink-faint)"
+            style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink-faint);pointer-events:none"
           ></i>
           <input
             type="search"
             name="search"
             value={filters.search ?? ''}
             placeholder="Search tasks…"
-            class="field pl-9 w-64"
+            class="field"
+            style="padding-left: 36px"
+            hx-get={`/board/inner?${sharedParams.toString()}`}
+            hx-trigger="keyup changed delay:300ms, search"
+            hx-target="#board"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            hx-include="this"
           />
         </div>
-      </form>
-      <button
-        class="btn btn-primary"
-        hx-get={`/task/new?project=${project}`}
-        hx-target="#drawer"
-        hx-swap="innerHTML"
-      >
-        <i data-lucide="plus"></i> New task
-      </button>
+        <button
+          class="btn btn-primary"
+          hx-get={`/task/new?project=${project}`}
+          hx-target="#drawer"
+          hx-swap="innerHTML"
+        >
+          <i data-lucide="plus"></i> New task
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const Kanban: FC<{ tasks: KanbanTask[]; project: string; agents: AgentPresentation[] }> = ({
   tasks,

@@ -87,11 +87,11 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           }
           .card:hover { box-shadow: 0 4px 20px rgba(31,30,26,0.06); }
           .btn {
-            display: inline-flex; align-items: center; gap: 8px;
-            padding: 9px 16px; border-radius: 10px; font-size: 14px; font-weight: 500;
-            border: 1px solid var(--border); background: var(--surface);
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            height: 38px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 500;
+            border: 1px solid var(--border); background: var(--surface); color: var(--ink);
             transition: background 120ms, border-color 120ms, transform 80ms;
-            white-space: nowrap;
+            white-space: nowrap; cursor: pointer;
           }
           .btn:hover { background: var(--surface-alt); }
           .btn:active { transform: scale(0.98); }
@@ -101,12 +101,14 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
           .btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
           .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
-          .btn-sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+          .btn-sm { height: 30px; padding: 0 10px; font-size: 13px; border-radius: 8px; }
           .pill {
-            display: inline-flex; align-items: center; gap: 5px; height: 28px;
-            padding: 0 11px; border-radius: 999px; font-size: 13px; font-weight: 500;
+            display: inline-flex; align-items: center; gap: 5px; height: 30px;
+            padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 500;
             border: 1px solid var(--border); color: var(--ink-muted);
+            background: var(--surface);
             transition: background 120ms, color 120ms, border-color 120ms;
+            cursor: pointer;
           }
           .pill:hover { background: var(--surface-alt); color: var(--ink); }
           .pill-active { background: var(--accent); color: #fff; border-color: var(--accent); }
