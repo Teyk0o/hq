@@ -3,10 +3,12 @@ import { join } from 'node:path';
 import {
   agentState,
   createLogger,
+  goals as goalsTable,
   loadAgentConfig,
   loadProjectConfig,
   openProjectDb,
   type HQDatabase,
+  type ProjectConfig,
 } from '@hq/core';
 
 const log = createLogger('scheduler');
@@ -57,6 +59,9 @@ export class Scheduler {
     const db = openProjectDb(join(project.path, '.hq', 'db.sqlite'));
     this.dbs.set(project.name, db);
 
+    // Sync goals at startup so the boss sees them immediately.
+    syncGoalsToDb(db, cfg.goals);
+
     const intervalMin = cfg.scheduler.interval_minutes;
     const stagger = cfg.scheduler.stagger_seconds;
     const pattern = `*/${intervalMin} * * * *`;
@@ -66,12 +71,21 @@ export class Scheduler {
         log.info('tick skipped', { project: project.name, reason: 'quota_paused' });
         return;
       }
+      // Re-read config each tick so goal/scheduler changes in project.toml
+      // are picked up without a daemon restart.
+      let tickCfg = cfg;
+      try {
+        tickCfg = await loadProjectConfig(join(project.path, '.hq', 'project.toml'));
+        syncGoalsToDb(db, tickCfg.goals);
+      } catch {
+        // Malformed toml after an edit — skip and use last known good config.
+      }
       const t0 = Date.now();
       const fired = await this.runTick(
         project,
         db,
-        cfg.scheduler.max_concurrent_agents,
-        stagger,
+        tickCfg.scheduler.max_concurrent_agents,
+        tickCfg.scheduler.stagger_seconds,
       );
       const elapsed = Date.now() - t0;
       log.info('tick fired', {
@@ -165,4 +179,32 @@ async function listAgents(projectPath: string): Promise<string[]> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function syncGoalsToDb(db: HQDatabase, goals: ProjectConfig['goals']): void {
+  for (const g of goals) {
+    db
+      .insert(goalsTable)
+      .values({
+        id: g.id,
+        title: g.title,
+        description: g.description,
+        assignees: JSON.stringify(g.assignees),
+        tasksPerWeek: g.tasks_per_week,
+        active: g.active,
+        updatedAt: Date.now(),
+      })
+      .onConflictDoUpdate({
+        target: goalsTable.id,
+        set: {
+          title: g.title,
+          description: g.description,
+          assignees: JSON.stringify(g.assignees),
+          tasksPerWeek: g.tasks_per_week,
+          active: g.active,
+          updatedAt: Date.now(),
+        },
+      })
+      .run();
+  }
 }
