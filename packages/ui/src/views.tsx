@@ -798,7 +798,9 @@ export const AgentsList: FC<{
               ? 'var(--ink-faint)'
               : a.status === 'paused_quota'
                 ? 'var(--violet)'
-                : 'var(--success)';
+                : a.status === 'paused'
+                  ? 'var(--ink-muted)'
+                  : 'var(--success)';
       const pct =
         a.tokens_budget > 0
           ? Math.min(100, Math.round((a.tokens_today / a.tokens_budget) * 100))
@@ -1598,7 +1600,9 @@ export const SidebarAgents: FC<{
             ? 'var(--danger)'
             : a.status === 'archived'
               ? 'var(--ink-faint)'
-              : 'var(--success)';
+              : a.status === 'paused' || a.status === 'paused_quota'
+                ? 'var(--ink-muted)'
+                : 'var(--success)';
       return (
         <li class="flex items-center gap-2.5 px-2.5 py-1.5 text-[14px] hover-bg rounded-lg">
           <Avatar agent={a} size={24} />

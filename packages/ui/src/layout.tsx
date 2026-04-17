@@ -284,6 +284,11 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
             hqShowToast('<i data-lucide="wifi-off" style="color:var(--danger)"></i><div style="font-weight:500">Network error</div>', 'error');
           });
           document.addEventListener('htmx:afterSwap', () => { if (window.lucide) window.lucide.createIcons(); });
+          document.addEventListener('hqToast', (e) => {
+            const msg = e.detail?.value ?? e.detail ?? 'Done';
+            hqShowToast('<i data-lucide="check" style="color:var(--success)"></i><div style="font-weight:500">' + msg + '</div>', 'success');
+            if (window.lucide) window.lucide.createIcons();
+          });
           document.addEventListener('configSaved', () => {
             hqShowToast('<i data-lucide="check" style="color:var(--success)"></i><div style="font-weight:500">Settings saved</div>', 'success');
             if (window.lucide) window.lucide.createIcons();

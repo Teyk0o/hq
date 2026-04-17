@@ -1211,7 +1211,8 @@ export function createApp(options: UiServerOptions): Hono {
       db.prepare(`UPDATE agent_state SET status = 'paused' WHERE name = ?`).run(name);
       bus.publish({ type: 'agent.status_changed', agent: name, status: 'paused' });
     }
-    return c.body(null, 204);
+    const msg = agents.length > 0 ? `${agents.length} agent(s) paused` : 'No active agents to pause';
+    return new Response(null, { status: 204, headers: { 'HX-Trigger': JSON.stringify({ hqToast: msg }) } });
   });
 
   app.post('/api/daemon/resume', (c) => {
@@ -1224,7 +1225,8 @@ export function createApp(options: UiServerOptions): Hono {
       db.prepare(`UPDATE agent_state SET status = 'idle', blocked_reason = NULL WHERE name = ?`).run(name);
       bus.publish({ type: 'agent.status_changed', agent: name, status: 'idle' });
     }
-    return c.body(null, 204);
+    const msg = agents.length > 0 ? `${agents.length} agent(s) started — next tick in ≤15 min` : 'No paused agents found';
+    return new Response(null, { status: 204, headers: { 'HX-Trigger': JSON.stringify({ hqToast: msg }) } });
   });
 
   app.patch('/api/config/project', async (c) => {
