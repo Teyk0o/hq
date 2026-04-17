@@ -1225,7 +1225,7 @@ export function createApp(options: UiServerOptions): Hono {
       db.prepare(`UPDATE agent_state SET status = 'idle', blocked_reason = NULL WHERE name = ?`).run(name);
       bus.publish({ type: 'agent.status_changed', agent: name, status: 'idle' });
     }
-    const msg = agents.length > 0 ? `${agents.length} agent(s) started — next tick in ≤15 min` : 'No paused agents found';
+    const msg = agents.length > 0 ? `${agents.length} agent(s) started - next tick in <15 min` : 'No paused agents found';
     return new Response(null, { status: 204, headers: { 'HX-Trigger': JSON.stringify({ hqToast: msg }) } });
   });
 
