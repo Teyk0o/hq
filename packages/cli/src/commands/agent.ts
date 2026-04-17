@@ -67,7 +67,7 @@ export async function agentNew(
   // Register in agent_state so daemon sees it on next tick.
   const db = new Database(join(projectPath, '.hq', 'db.sqlite'));
   db.prepare(
-    `INSERT OR IGNORE INTO agent_state (name, status, budget_reset_at) VALUES (?, 'idle', ?)`,
+    `INSERT OR IGNORE INTO agent_state (name, status, budget_reset_at) VALUES (?, 'paused', ?)`,
   ).run(name, tomorrowMidnight());
   db.close();
 
