@@ -135,8 +135,8 @@ export function createApp(options: UiServerOptions): Hono {
       params.push(filters.priority);
     }
     if (filters.package) {
-      conditions.push('t.package = ?');
-      params.push(filters.package);
+      conditions.push('t.package LIKE ?');
+      params.push(`%${filters.package}%`);
     }
     if (filters.search) {
       conditions.push('t.title LIKE ?');
@@ -913,6 +913,58 @@ export function createApp(options: UiServerOptions): Hono {
 
     bus.publish({ type: 'task.created', task_id: id, by: 'human' });
     return c.html(<></>);
+  });
+
+  app.delete('/api/tasks/:id', (c) => {
+    const id = c.req.param('id');
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const task = db
+      .prepare('SELECT id, status, assignee FROM tasks WHERE id = ?')
+      .get(id) as { id: string; status: string; assignee: string | null } | undefined;
+    if (!task) return c.json({ error: 'not found' }, 404);
+
+    // If an agent is actively working on this task, interrupt it and return
+    // it to idle so it can pick up something else next tick.
+    if (task.status === 'in_progress' && task.assignee) {
+      const agentRow = db
+        .prepare('SELECT tmux_session FROM agent_state WHERE name = ?')
+        .get(task.assignee) as { tmux_session: string | null } | undefined;
+      if (agentRow?.tmux_session) {
+        spawnSync('tmux', ['send-keys', '-t', agentRow.tmux_session, 'C-c'], { stdio: 'ignore' });
+      }
+      db.prepare(`UPDATE agent_state SET status = 'idle' WHERE name = ? AND status = 'working'`).run(task.assignee);
+      bus.publish({ type: 'agent.status_changed', agent: task.assignee, status: 'idle' });
+    }
+
+    // Cascade-delete related rows (no FK constraints in schema).
+    db.prepare('DELETE FROM comments WHERE task_id = ?').run(id);
+    db.prepare('DELETE FROM reviews WHERE task_id = ?').run(id);
+    db.prepare('DELETE FROM task_dependencies WHERE task_id = ? OR depends_on = ?').run(id, id);
+    db.prepare('DELETE FROM activity WHERE task_id = ?').run(id);
+    db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+
+    bus.publish({ type: 'task.status_changed', task_id: id, from: task.status as never, to: 'done', by: 'human' });
+    return new Response(null, {
+      status: 204,
+      headers: { 'HX-Trigger': JSON.stringify({ hqToast: 'Task deleted', closeDrawer: 'true' }) },
+    });
+  });
+
+  app.patch('/api/tasks/:id/priority', async (c) => {
+    const id = c.req.param('id');
+    const project = currentProject(c.req.raw);
+    const form = await c.req.parseBody();
+    const priority = Number.parseInt(String(form.priority ?? '3'), 10);
+    if (!Number.isFinite(priority) || priority < 1 || priority > 5)
+      return c.json({ error: 'priority must be 1–5' }, 400);
+    const db = openDb(project);
+    db.prepare('UPDATE tasks SET priority = ?, updated_at = ? WHERE id = ?').run(priority, Date.now(), id);
+    bus.publish({ type: 'task.status_changed', task_id: id, from: 'todo', to: 'todo', by: 'human' });
+    return new Response(null, {
+      status: 204,
+      headers: { 'HX-Trigger': JSON.stringify({ hqToast: `Priority set to P${priority}` }) },
+    });
   });
 
   app.post('/api/tasks/:id/comments', async (c) => {

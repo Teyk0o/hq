@@ -325,14 +325,32 @@ export const TaskDrawer: FC<{
     <div class="drawer fixed right-0 top-0 h-full w-[520px] bg-white border-l border-soft overflow-y-auto z-30" style="background: var(--surface); box-shadow: -8px 0 32px rgba(31,30,26,0.06)">
       <div class="sticky top-0 border-b border-soft px-7 py-4 flex items-center justify-between z-10" style="background: var(--surface)">
         <span class="text-[12px] text-faint mono">{task.id}</span>
-        <button
-          class="btn btn-sm"
-          hx-get="/drawer/empty"
-          hx-target="#drawer"
-          aria-label="close"
-        >
-          <i data-lucide="x"></i>
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            class="btn btn-sm"
+            style="color: var(--danger)"
+            hx-delete={`/api/tasks/${task.id}?project=${project}`}
+            hx-swap="none"
+            hx-confirm={
+              task.status === 'in_progress'
+                ? `"${task.title}" is being worked on by ${task.assignee ?? 'an agent'}. Deleting will interrupt them. Continue?`
+                : task.status === 'done' || task.status === 'approved'
+                  ? `Delete completed task "${task.title}"? This cannot be undone.`
+                  : `Delete "${task.title}"?`
+            }
+            aria-label="delete task"
+          >
+            <i data-lucide="trash-2"></i>
+          </button>
+          <button
+            class="btn btn-sm"
+            hx-get="/drawer/empty"
+            hx-target="#drawer"
+            aria-label="close"
+          >
+            <i data-lucide="x"></i>
+          </button>
+        </div>
       </div>
       <div class="px-7 py-6">
         <h2 class="text-[24px] font-semibold leading-tight">{task.title}</h2>
@@ -350,6 +368,18 @@ export const TaskDrawer: FC<{
               {task.assignee}
             </span>
           )}
+          <form hx-patch={`/api/tasks/${task.id}/priority?project=${project}`} hx-swap="none" class="inline-flex items-center gap-1.5">
+            <i data-lucide="flag" class="icon-sm" style="color:var(--ink-faint)"></i>
+            <select
+              name="priority"
+              class="text-[12px] text-muted rounded px-1.5 py-0.5 border border-soft bg-transparent cursor-pointer"
+              onchange="this.form.requestSubmit()"
+            >
+              {([1,2,3,4,5] as const).map((p) => (
+                <option value={p} selected={task.priority === p}>P{p}{p === 1 ? ' — urgent' : p === 2 ? ' — high' : p === 3 ? ' — normal' : p === 4 ? ' — low' : ' — backlog'}</option>
+              ))}
+            </select>
+          </form>
           {task.branch && (
             <span class="inline-flex items-center gap-1.5 text-[12px] text-muted mono">
               <i data-lucide="git-branch" class="icon-sm"></i>

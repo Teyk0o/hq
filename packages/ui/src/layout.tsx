@@ -293,6 +293,10 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
             hqShowToast('<i data-lucide="check" style="color:var(--success)"></i><div style="font-weight:500">Settings saved</div>', 'success');
             if (window.lucide) window.lucide.createIcons();
           });
+          document.addEventListener('closeDrawer', () => {
+            const drawer = document.getElementById('drawer');
+            if (drawer) htmx.ajax('GET', '/drawer/empty', { target: '#drawer', swap: 'innerHTML' });
+          });
           document.addEventListener('DOMContentLoaded', hqInit);
         `,
         }}
