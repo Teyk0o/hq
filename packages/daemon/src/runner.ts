@@ -128,10 +128,35 @@ export async function triggerHeartbeat(options: RunHeartbeatOptions): Promise<vo
     agent.timeout?.heartbeat_minutes ?? project.heartbeat.default_timeout_minutes;
   const maxTokens = agent.budget?.max_tokens_per_heartbeat ?? 200_000;
 
+  const capabilities = resolveCapabilities(agent.agent.role, agent.capabilities);
+  // Fallback: if no non-archived agent in this project has can_review enabled,
+  // grant it to the current agent so peer_review tasks don't get stuck forever.
+  if (!capabilities.can_review) {
+    const agentFiles = await import('node:fs/promises').then((m) =>
+      m.readdir(join(options.projectPath, '.hq', 'agents')).catch(() => [] as string[]),
+    );
+    let hasReviewer = false;
+    for (const f of agentFiles) {
+      if (!f.endsWith('.toml')) continue;
+      const name = f.slice(0, -5);
+      if (name === options.agentName) continue;
+      try {
+        const cfg = await loadAgentConfig(join(options.projectPath, '.hq', 'agents', f));
+        const state = options.db.select().from(agentState).where(eq(agentState.name, name)).get();
+        if (state?.status === 'archived') continue;
+        if (resolveCapabilities(cfg.agent.role, cfg.capabilities).can_review) {
+          hasReviewer = true;
+          break;
+        }
+      } catch { /* skip malformed */ }
+    }
+    if (!hasReviewer) capabilities.can_review = true;
+  }
+
   const prompt = await buildHeartbeatPrompt({
     agentName: options.agentName,
     agentRole: agent.agent.role,
-    capabilities: resolveCapabilities(agent.agent.role, agent.capabilities),
+    capabilities,
     projectName: project.project.name,
     projectPath: options.projectPath,
     projectConfig: project,

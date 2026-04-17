@@ -6,7 +6,7 @@ export type AgentRole = (typeof AGENT_ROLES)[number];
 export const ROLE_CAPABILITIES: Record<AgentRole, AgentCapabilities> = {
   boss: {
     can_claim_tasks: false,
-    can_review: true,
+    can_review: false,
     can_promote_tasks: true,
     can_create_tasks: true,
     can_write_files: false,
