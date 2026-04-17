@@ -111,11 +111,17 @@ local copy instead: `~/.local/share/hq/docs/CLAUDE.md` (installed by
 ```bash
 cd ~/src/myproject
 hq init                                      # scaffold .hq/
-hq agent new alice --role worker
-hq agent new bob   --role reviewer
+hq agent new boss  --role boss               # Opus: plans from goals
+hq agent new alice --role worker             # Sonnet: claims & implements tasks
+hq agent new bob   --role reviewer           # Sonnet: peer-reviews before merge
 hq task add "Refactor /users endpoint" --priority 2
 hq daemon start
+# Agents start paused — click "Start agents" in the UI (http://127.0.0.1:7433)
 ```
+
+Agents are created **paused** by default so you can review your setup before
+the first heartbeat fires. Hit **Start agents** in the dashboard or run
+`hq agent resume <name>` from the CLI.
 
 ## Architecture
 
@@ -135,6 +141,12 @@ Each agent runs in a **persistent tmux session** with
 constraining filesystem access. Claude Code consumes the `hq` MCP server
 via `.mcp.json`, which writes directly to the project's SQLite DB. The
 daemon listens on the event bus and wakes reviewers event-driven.
+
+Task branches follow the pattern `agent/<name>-task-<id>` (dash, not slash)
+so they don't collide with the base worktree branch `agent/<name>`.
+
+**Recommended models:** Opus for the boss (heavy planning), Sonnet for workers
+and reviewers, Haiku for readonly/observer agents.
 
 ## Documentation
 
