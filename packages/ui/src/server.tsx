@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import { Database } from 'bun:sqlite';
 import { existsSync, readdirSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -10,7 +10,7 @@ import { lastTickAtMap } from '@hq/daemon';
 import { getSharedBus } from '@hq/mcp';
 
 const DAEMON_STARTED_AT = Date.now();
-import { parse as parseToml } from 'smol-toml';
+import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import {
   ActivityFeed,
   AgentsList,
@@ -1202,8 +1202,94 @@ export function createApp(options: UiServerOptions): Hono {
   });
 
   app.post('/api/daemon/pause', (c) => {
-    bus.publish({ type: 'daemon.quota_paused', week_all_pct: 0 });
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const agents = db
+      .prepare(`SELECT name FROM agent_state WHERE status NOT IN ('archived', 'paused', 'paused_quota')`)
+      .all() as Array<{ name: string }>;
+    for (const { name } of agents) {
+      db.prepare(`UPDATE agent_state SET status = 'paused' WHERE name = ?`).run(name);
+      bus.publish({ type: 'agent.status_changed', agent: name, status: 'paused' });
+    }
     return c.body(null, 204);
+  });
+
+  app.post('/api/daemon/resume', (c) => {
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const agents = db
+      .prepare(`SELECT name FROM agent_state WHERE status = 'paused'`)
+      .all() as Array<{ name: string }>;
+    for (const { name } of agents) {
+      db.prepare(`UPDATE agent_state SET status = 'idle', blocked_reason = NULL WHERE name = ?`).run(name);
+      bus.publish({ type: 'agent.status_changed', agent: name, status: 'idle' });
+    }
+    return c.body(null, 204);
+  });
+
+  app.patch('/api/config/project', async (c) => {
+    const project = currentProject(c.req.raw);
+    const projectPath = options.projects[project];
+    if (!projectPath) return c.notFound();
+    const tomlPath = join(projectPath, '.hq', 'project.toml');
+    let raw: string;
+    try {
+      raw = await readFile(tomlPath, 'utf-8');
+    } catch {
+      return c.json({ error: 'project.toml not found' }, 404);
+    }
+    const data = parseToml(raw) as Record<string, unknown>;
+    const body = await c.req.parseBody();
+
+    const set = (section: string, key: string, val: unknown) => {
+      if (!data[section] || typeof data[section] !== 'object') data[section] = {};
+      (data[section] as Record<string, unknown>)[key] = val;
+    };
+    const num = (k: string) => {
+      const v = Number(body[k]);
+      return Number.isFinite(v) ? v : undefined;
+    };
+    const bool = (k: string) => body[k] === 'true';
+
+    if (body['project_default_model'])
+      set('project', 'default_model', body['project_default_model']);
+    if (body['project_default_branch'] !== undefined)
+      set('project', 'default_branch', body['project_default_branch']);
+
+    const iv = num('scheduler_interval_minutes');
+    if (iv !== undefined) set('scheduler', 'interval_minutes', iv);
+    const ss = num('scheduler_stagger_seconds');
+    if (ss !== undefined) set('scheduler', 'stagger_seconds', ss);
+    const mc = num('scheduler_max_concurrent_agents');
+    if (mc !== undefined) set('scheduler', 'max_concurrent_agents', mc);
+    const dtb = num('scheduler_daily_token_budget');
+    if (dtb !== undefined) set('scheduler', 'daily_token_budget', dtb);
+
+    const ht = num('heartbeat_default_timeout_minutes');
+    if (ht !== undefined) set('heartbeat', 'default_timeout_minutes', ht);
+    const hs = num('heartbeat_max_session_hours');
+    if (hs !== undefined) set('heartbeat', 'max_session_hours', hs);
+    const hr = num('heartbeat_retry_max');
+    if (hr !== undefined) set('heartbeat', 'retry_max', hr);
+
+    const mr = num('kanban_min_reviewers');
+    if (mr !== undefined) set('kanban', 'min_reviewers', mr);
+    set('kanban', 'require_lint_before_review', bool('kanban_require_lint_before_review'));
+    set('kanban', 'require_typecheck_before_review', bool('kanban_require_typecheck_before_review'));
+
+    set('sandbox', 'enabled', bool('sandbox_enabled'));
+    set('sandbox', 'share_net', bool('sandbox_share_net'));
+
+    if (body['webhook_discord_url'] !== undefined)
+      set('webhook', 'discord_url', body['webhook_discord_url']);
+    const eventsRaw = String(body['webhook_discord_events'] ?? '');
+    set('webhook', 'discord_events', eventsRaw ? eventsRaw.split(',').map((s) => s.trim()).filter(Boolean) : []);
+
+    await writeFile(tomlPath, stringifyToml(data), 'utf-8');
+    return new Response(null, {
+      status: 204,
+      headers: { 'HX-Trigger': 'configSaved' },
+    });
   });
 
   return app;

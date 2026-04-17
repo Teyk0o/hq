@@ -284,6 +284,10 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
             hqShowToast('<i data-lucide="wifi-off" style="color:var(--danger)"></i><div style="font-weight:500">Network error</div>', 'error');
           });
           document.addEventListener('htmx:afterSwap', () => { if (window.lucide) window.lucide.createIcons(); });
+          document.addEventListener('configSaved', () => {
+            hqShowToast('<i data-lucide="check" style="color:var(--success)"></i><div style="font-weight:500">Settings saved</div>', 'success');
+            if (window.lucide) window.lucide.createIcons();
+          });
           document.addEventListener('DOMContentLoaded', hqInit);
         `,
         }}
@@ -387,6 +391,14 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
               Enable notifications
             </button>
             <button
+              hx-post="/api/daemon/resume"
+              hx-swap="none"
+              class="btn w-full justify-center"
+              style="color: var(--accent); border-color: var(--accent)"
+            >
+              <i data-lucide="play"></i> Start agents
+            </button>
+            <button
               hx-post="/api/daemon/pause"
               hx-swap="none"
               class="btn w-full justify-center"
@@ -431,7 +443,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
               <span class="skel" style="width: 78px; height: 26px; border-radius: 999px" />
             </div>
           </header>
-          <div class="flex-1 min-h-0 px-10 py-7 flex flex-col overflow-hidden">{children}</div>
+          <div class="flex-1 min-h-0 px-10 py-7 flex flex-col overflow-y-auto">{children}</div>
         </main>
       </div>
 
