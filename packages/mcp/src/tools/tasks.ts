@@ -350,11 +350,18 @@ export async function promoteTask(ctx: McpContext, input: { id: string }) {
  */
 function scopeMatches(taskPackage: string, scopePackages: string[]): boolean {
   if (scopePackages.includes(taskPackage)) return true;
-  // Normalise each token: strip path prefix (src/, lib/, …) and file extension.
-  const normalize = (t: string) =>
-    t.replace(/\.[a-z]{1,4}$/, '').replace(/^.*\//, '').toLowerCase();
-  const tokens = taskPackage.split(/[\s,+]+/).map(normalize).filter(Boolean);
+  const pkg = taskPackage.toLowerCase();
   const scopes = scopePackages.map((s) => s.toLowerCase());
+  // Raw substring: "src/systems/streamer/config.rs" contains "streamer" → match.
+  if (scopes.some((s) => pkg.includes(s))) return true;
+  // Token-level: split on separators, then check every path component after
+  // stripping file extension so "streamer_config.rs" → ["streamer_config"] → match "streamer".
+  const stripExt = (t: string) => t.replace(/\.[a-z]{1,4}$/, '');
+  const tokens = taskPackage
+    .split(/[\s,+/]+/)
+    .flatMap((t) => [t, stripExt(t)])
+    .map((t) => t.toLowerCase())
+    .filter(Boolean);
   return tokens.some((t) => scopes.some((s) => s === t || t.includes(s) || s.includes(t)));
 }
 
