@@ -125,8 +125,15 @@ function buildProtocolSteps(ctx: HeartbeatPromptContext): string[] {
       `  ${n++}. PLAN PHASE: for each active goal below, check how many tasks were`,
       `       created this week vs its target. If under target AND no existing open`,
       `       task already covers the same intent, call create_task then promote_task.`,
-      `       IMPORTANT: tasks listed as [todo], [in_progress], [peer_review], or`,
-      `       [blocked] are still open — do NOT create a duplicate for them.`,
+      `       IMPORTANT: ALL statuses below mean the work is NOT done yet — do NOT`,
+      `       create a duplicate for ANY of these:`,
+      `         [todo]        — waiting to be claimed`,
+      `         [in_progress] — agent is working on it`,
+      `         [peer_review] — submitted, agents reviewing`,
+      `         [review]      — PEER-APPROVED, waiting for human sign-off (YOU). Do NOT recreate.`,
+      `         [approved]    — human approved, pending merge`,
+      `         [blocked]     — blocked, will be retried`,
+      `       Only [done] means the work is truly finished.`,
     );
   }
   steps.push(`  ${n++}. update_progress with a short summary.`);
@@ -170,9 +177,15 @@ function buildGoalsSection(ctx: HeartbeatPromptContext): string {
     );
     if (g.description) blocks.push(`      ${g.description.trim()}`);
     if (openTasks.length > 0) {
-      blocks.push('      open tasks (already exist — do NOT duplicate):');
+      blocks.push('      open tasks — DO NOT RECREATE ANY OF THESE:');
       for (const t of openTasks) {
-        blocks.push(`        - [${t.status}] ${t.id}: ${t.title}`);
+        const label =
+          t.status === 'review'
+            ? 'review — PEER-APPROVED, awaiting human'
+            : t.status === 'approved'
+              ? 'approved — awaiting merge'
+              : t.status;
+        blocks.push(`        - [${label}] ${t.id}: ${t.title}`);
       }
     }
   }
