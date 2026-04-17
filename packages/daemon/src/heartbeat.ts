@@ -99,7 +99,10 @@ function buildProtocolSteps(ctx: HeartbeatPromptContext): string[] {
   let n = 2;
   if (ctx.capabilities.can_review) {
     steps.push(
-      `  ${n++}. REVIEW PHASE: list_tasks(status="peer_review"), review eligible ones via submit_review.`,
+      `  ${n++}. REVIEW PHASE: list_tasks(status="peer_review"), review eligible ones via submit_review`,
+      `       (verdict="approved" or "changes_requested"). changes_requested resets the task to todo`,
+      `       so any worker can address the feedback. Alternatively, use request_rework for finer`,
+      `       control when you want to keep the task but redirect its scope.`,
     );
   }
   if (ctx.capabilities.can_claim_tasks) {
@@ -114,9 +117,16 @@ function buildProtocolSteps(ctx: HeartbeatPromptContext): string[] {
       `  ${n++}. TRIAGE PHASE: call list_tasks(status="backlog"). For every task`,
       `       already in backlog (including ones created by the operator), call`,
       `       promote_task to move it to todo so workers can claim it.`,
+      `  ${n++}. REWORK PHASE: scan list_tasks for tasks that need changes rather`,
+      `       than a new parallel task. If existing work needs iteration, call`,
+      `       request_rework(id, reason) — it adds your comment and resets the task`,
+      `       to todo so a worker can address the feedback. Do NOT create a new task`,
+      `       for the same intent.`,
       `  ${n++}. PLAN PHASE: for each active goal below, check how many tasks were`,
-      `       created this week vs its target. If under target, call create_task and`,
-      `       then promote_task to move it from backlog to todo.`,
+      `       created this week vs its target. If under target AND no existing open`,
+      `       task already covers the same intent, call create_task then promote_task.`,
+      `       IMPORTANT: tasks listed as [todo], [in_progress], [peer_review], or`,
+      `       [blocked] are still open — do NOT create a duplicate for them.`,
     );
   }
   steps.push(`  ${n++}. update_progress with a short summary.`);
@@ -144,29 +154,25 @@ function buildGoalsSection(ctx: HeartbeatPromptContext): string {
     // Only propose goals where this agent is an assignee (or no assignee set).
     if (assignees.length > 0 && !assignees.includes(ctx.agentName)) continue;
 
-    const recentCount = ctx.db
-      .select()
-      .from(tasksTable)
-      .where(and(eq(tasksTable.goalId, g.id), gte(tasksTable.createdAt, weekAgo)))
-      .all().length;
-
-    const recent = ctx.db
+    const allGoalTasks = ctx.db
       .select()
       .from(tasksTable)
       .where(eq(tasksTable.goalId, g.id))
       .orderBy(desc(tasksTable.createdAt))
-      .limit(5)
       .all();
+
+    const recentCount = allGoalTasks.filter((t) => t.createdAt >= weekAgo).length;
+    const openTasks = allGoalTasks.filter((t) => t.status !== 'done');
 
     blocks.push(
       `  • ${g.id} — ${g.title}`,
       `      target: ${g.tasksPerWeek} tasks/week, created this week: ${recentCount}`,
     );
     if (g.description) blocks.push(`      ${g.description.trim()}`);
-    if (recent.length > 0) {
-      blocks.push('      recent tasks:');
-      for (const t of recent) {
-        blocks.push(`        - [${t.status}] ${t.title}`);
+    if (openTasks.length > 0) {
+      blocks.push('      open tasks (already exist — do NOT duplicate):');
+      for (const t of openTasks) {
+        blocks.push(`        - [${t.status}] ${t.id}: ${t.title}`);
       }
     }
   }
