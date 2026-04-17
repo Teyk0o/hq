@@ -44,6 +44,8 @@ export interface UiServerOptions {
   port?: number;
   projects: Record<string, string>;
   defaultProject: string;
+  /** Optional scheduler reference so resume can trigger an immediate tick. */
+  tickNow?: (projectName: string) => Promise<void>;
 }
 
 export function createApp(options: UiServerOptions): Hono {
@@ -554,6 +556,7 @@ export function createApp(options: UiServerOptions): Hono {
         ? { status: 'idle', blocked_reason: null }
         : null,
     );
+    if (ok) void options.tickNow?.(project);
     return ok ? c.body(null, 204) : c.json({ error: 'cannot resume in current state' }, 409);
   });
 
@@ -1246,7 +1249,8 @@ export function createApp(options: UiServerOptions): Hono {
       db.prepare(`UPDATE agent_state SET status = 'idle', blocked_reason = NULL WHERE name = ?`).run(name);
       bus.publish({ type: 'agent.status_changed', agent: name, status: 'idle' });
     }
-    const msg = agents.length > 0 ? `${agents.length} agent(s) started - next tick in <15 min` : 'No paused agents found';
+    if (agents.length > 0) void options.tickNow?.(project);
+    const msg = agents.length > 0 ? `${agents.length} agent(s) started` : 'No paused agents found';
     return new Response(null, { status: 204, headers: { 'HX-Trigger': JSON.stringify({ hqToast: msg }) } });
   });
 

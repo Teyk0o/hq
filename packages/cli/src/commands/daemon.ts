@@ -142,6 +142,7 @@ export async function daemonStart(): Promise<void> {
     port: global.daemon.ui_port,
     projects: projectMap,
     defaultProject: projects[0]!.name,
+    tickNow: (projectName) => scheduler.tickNow(projectName),
   });
 
   console.log(`[daemon] started with ${projects.length} project(s)`);

@@ -39,8 +39,11 @@ export interface SchedulerOptions {
 export class Scheduler {
   private readonly timers: Cron[] = [];
   private readonly dbs = new Map<string, HQDatabase>();
+  private readonly projects = new Map<string, { entry: ProjectEntry; cfg: ProjectConfig }>();
+  private isQuotaPaused: (() => boolean) | undefined;
 
   async start(options: SchedulerOptions): Promise<void> {
+    this.isQuotaPaused = options.isQuotaPaused;
     for (const project of options.projects) {
       await this.scheduleProject(project, options.isQuotaPaused);
     }
@@ -51,6 +54,22 @@ export class Scheduler {
     this.timers.length = 0;
   }
 
+  /** Fire an immediate tick for a specific project (e.g. after "Start agents"). */
+  async tickNow(projectName: string): Promise<void> {
+    if (this.isQuotaPaused?.()) return;
+    const entry = this.projects.get(projectName);
+    if (!entry) return;
+    const db = this.dbs.get(projectName);
+    if (!db) return;
+    await this.runTick(
+      entry.entry,
+      db,
+      entry.cfg.scheduler.max_concurrent_agents,
+      entry.cfg.scheduler.stagger_seconds,
+    );
+    lastTickAt.set(projectName, Date.now());
+  }
+
   private async scheduleProject(
     project: ProjectEntry,
     isQuotaPaused?: () => boolean,
@@ -58,6 +77,7 @@ export class Scheduler {
     const cfg = await loadProjectConfig(join(project.path, '.hq', 'project.toml'));
     const db = openProjectDb(join(project.path, '.hq', 'db.sqlite'));
     this.dbs.set(project.name, db);
+    this.projects.set(project.name, { entry: project, cfg });
 
     // Sync goals at startup so the boss sees them immediately.
     syncGoalsToDb(db, cfg.goals);
