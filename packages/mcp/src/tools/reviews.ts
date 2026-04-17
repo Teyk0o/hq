@@ -82,21 +82,28 @@ export async function submitReview(ctx: McpContext, input: SubmitReviewInput) {
       all.filter((r) => r.verdict === 'approved').map((r) => r.reviewer),
     );
 
-    let transitionTo: 'in_progress' | 'review' | null = null;
-    if (hasChangesRequested) transitionTo = 'in_progress';
+    let transitionTo: 'todo' | 'review' | null = null;
+    if (hasChangesRequested) transitionTo = 'todo';
     else if (approvals.size >= minReviewers) transitionTo = 'review';
 
     if (transitionTo) {
-      tx.update(tasksTable)
-        .set({ status: transitionTo, updatedAt: Date.now() })
-        .where(and(eq(tasksTable.id, input.id), eq(tasksTable.status, 'peer_review')))
-        .run();
+      if (transitionTo === 'todo') {
+        tx.update(tasksTable)
+          .set({ status: transitionTo, assignee: null, updatedAt: Date.now() })
+          .where(and(eq(tasksTable.id, input.id), eq(tasksTable.status, 'peer_review')))
+          .run();
+      } else {
+        tx.update(tasksTable)
+          .set({ status: transitionTo, updatedAt: Date.now() })
+          .where(and(eq(tasksTable.id, input.id), eq(tasksTable.status, 'peer_review')))
+          .run();
+      }
       const after = tx.select().from(tasksTable).where(eq(tasksTable.id, input.id)).get();
       if (after?.status === transitionTo) {
         return { transitionTo };
       }
     }
-    return { transitionTo: null as 'in_progress' | 'review' | null };
+    return { transitionTo: null as 'todo' | 'review' | null };
   });
 
   ctx.bus.publish({
@@ -117,6 +124,45 @@ export async function submitReview(ctx: McpContext, input: SubmitReviewInput) {
   }
 
   return { ok: true, next_status: outcome.transitionTo ?? 'peer_review' };
+}
+
+/**
+ * Request rework on any open task: adds a comment and resets it to `todo`
+ * (unassigned) so any worker can pick it up. Usable by boss and reviewer.
+ * This is the preferred tool when a task needs changes instead of creating
+ * a near-duplicate task.
+ */
+export async function requestRework(
+  ctx: McpContext,
+  input: { id: string; reason: string },
+) {
+  requireCapability(ctx, 'can_review');
+  const task = ctx.db.select().from(tasksTable).where(eq(tasksTable.id, input.id)).get();
+  if (!task) throw new McpError('task_not_found', `Task not found: ${input.id}`);
+  if (task.status === 'done') {
+    throw new McpError('invalid_state', 'Cannot request rework on a done task');
+  }
+
+  const commentId = newId();
+  const prevStatus = task.status;
+  ctx.db.transaction((tx) => {
+    tx.insert(commentsTable)
+      .values({
+        id: commentId,
+        taskId: input.id,
+        author: ctx.agentName,
+        body: `**Rework requested:** ${input.reason}`,
+      })
+      .run();
+    tx.update(tasksTable)
+      .set({ status: 'todo', assignee: null, updatedAt: Date.now() })
+      .where(eq(tasksTable.id, input.id))
+      .run();
+  });
+
+  ctx.bus.publish({ type: 'task.commented', task_id: input.id, author: ctx.agentName, comment_id: commentId });
+  ctx.bus.publish({ type: 'task.status_changed', task_id: input.id, from: prevStatus, to: 'todo', by: ctx.agentName });
+  return { ok: true, comment_id: commentId };
 }
 
 export async function addComment(

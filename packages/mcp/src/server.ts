@@ -121,6 +121,14 @@ const tools: ToolSpec[] = [
     handler: (ctx, input) => reviews.submitReview(ctx, input as reviews.SubmitReviewInput),
   },
   {
+    name: 'request_rework',
+    description:
+      'Add a comment explaining what needs to change and reset the task to todo (unassigned). ' +
+      'Use this instead of creating a near-duplicate task when existing work needs iteration.',
+    schema: z.object({ id: z.string(), reason: z.string() }),
+    handler: (ctx, input) => reviews.requestRework(ctx, input as { id: string; reason: string }),
+  },
+  {
     name: 'add_comment',
     description: 'Add a comment to a task, optionally with @mentions.',
     schema: z.object({
