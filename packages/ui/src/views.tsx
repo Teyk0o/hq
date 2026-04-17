@@ -591,22 +591,21 @@ export const TaskCreateForm: FC<{ project: string }> = ({ project }) => (
   </div>
 );
 
-export const Inbox: FC<{
-  messages: Array<{
-    id: string;
-    from_agent: string;
-    to_agent: string;
-    subject: string;
-    body: string;
-    created_at: number;
-    read_at: number | null;
-  }>;
-  agents: AgentPresentation[];
-  project: string;
-}> = ({ messages, agents, project }) => (
-  <div class="max-w-4xl space-y-5">
-    <ComposeMessage project={project} agents={agents} />
-    <ul class="space-y-3">
+type InboxMessage = {
+  id: string;
+  from_agent: string;
+  to_agent: string;
+  subject: string;
+  body: string;
+  created_at: number;
+  read_at: number | null;
+};
+
+export const InboxMessages: FC<{ messages: InboxMessage[]; agents: AgentPresentation[] }> = ({
+  messages,
+  agents,
+}) => (
+  <ul class="space-y-3">
     {messages.length === 0 && (
       <li class="text-[14px] text-faint py-10 text-center">
         <i data-lucide="inbox" class="icon-lg" style="color:var(--ink-faint)"></i>
@@ -614,16 +613,31 @@ export const Inbox: FC<{
       </li>
     )}
     {messages.map((m) => {
+      const isForHuman = m.to_agent === 'human';
       const isBroadcast = m.to_agent === '*';
       return (
-        <li class="card p-5">
+        <li
+          class="card p-5"
+          style={
+            isForHuman
+              ? 'border-left: 3px solid var(--accent); background: var(--accent-soft)'
+              : ''
+          }
+        >
           <div class="flex items-center gap-3 mb-3">
             <Avatar agent={agentFor(agents, m.from_agent)} size={32} />
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 text-[14px]">
+              <div class="flex items-center gap-2 flex-wrap text-[14px]">
                 <span class="font-semibold">{m.from_agent}</span>
                 <i data-lucide="arrow-right" class="icon-sm" style="color:var(--ink-faint)"></i>
-                {isBroadcast ? (
+                {isForHuman ? (
+                  <span
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12px] font-semibold text-white"
+                    style="background: var(--accent)"
+                  >
+                    <i data-lucide="at-sign" class="icon-xs"></i> you
+                  </span>
+                ) : isBroadcast ? (
                   <span class="text-muted font-medium">everyone</span>
                 ) : (
                   <span class="text-muted inline-flex items-center gap-1.5">
@@ -631,9 +645,16 @@ export const Inbox: FC<{
                   </span>
                 )}
               </div>
-              {m.subject && <div class="text-[14px] font-medium mt-0.5">{m.subject}</div>}
+              {m.subject && (
+                <div
+                  class="text-[14px] font-semibold mt-0.5"
+                  style={isForHuman ? 'color: var(--accent)' : ''}
+                >
+                  {m.subject}
+                </div>
+              )}
             </div>
-            <span class="text-[12px] text-faint mono">
+            <span class="text-[12px] text-faint mono shrink-0">
               {new Date(m.created_at).toLocaleString()}
             </span>
           </div>
@@ -641,7 +662,24 @@ export const Inbox: FC<{
         </li>
       );
     })}
-    </ul>
+  </ul>
+);
+
+export const Inbox: FC<{
+  messages: InboxMessage[];
+  agents: AgentPresentation[];
+  project: string;
+}> = ({ messages, agents, project }) => (
+  <div class="max-w-4xl space-y-5">
+    <ComposeMessage project={project} agents={agents} />
+    <div
+      id="inbox-messages"
+      hx-get={`/inbox/messages?project=${project}`}
+      hx-trigger="sse:message.sent from:body"
+      hx-swap="innerHTML"
+    >
+      <InboxMessages messages={messages} agents={agents} />
+    </div>
   </div>
 );
 
