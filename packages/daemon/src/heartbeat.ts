@@ -111,6 +111,9 @@ function buildProtocolSteps(ctx: HeartbeatPromptContext): string[] {
   }
   if (ctx.capabilities.can_create_tasks) {
     steps.push(
+      `  ${n++}. TRIAGE PHASE: call list_tasks(status="backlog"). For every task`,
+      `       already in backlog (including ones created by the operator), call`,
+      `       promote_task to move it to todo so workers can claim it.`,
       `  ${n++}. PLAN PHASE: for each active goal below, check how many tasks were`,
       `       created this week vs its target. If under target, call create_task and`,
       `       then promote_task to move it from backlog to todo.`,
