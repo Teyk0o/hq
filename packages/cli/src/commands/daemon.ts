@@ -1,4 +1,4 @@
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, access } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { loadGlobalConfig, loadProjectConfig } from '@hq/core';
@@ -40,7 +40,16 @@ function printBanner(): void {
 
 export async function daemonStart(): Promise<void> {
   printBanner();
-  const projects = listProjects().map((p) => ({ name: p.name, path: p.path }));
+  const allProjects = listProjects();
+  const projects: { name: string; path: string }[] = [];
+  for (const p of allProjects) {
+    try {
+      await access(join(p.path, '.hq', 'project.toml'));
+      projects.push({ name: p.name, path: p.path });
+    } catch {
+      console.warn(`[registry] skipping "${p.name}" — path not found: ${p.path}`);
+    }
+  }
   if (projects.length === 0) {
     console.error('No projects registered. Run `hq init` in a project directory first.');
     process.exit(1);
