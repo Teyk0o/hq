@@ -245,7 +245,7 @@ max_concurrent_agents = 3
 daily_token_budget = 0         # 0 = unlimited (on top of Claude quota)
 
 [git]
-branch_prefix = "agent/"       # branches become agent/<agent>/<task-id>
+branch_prefix = "agent/"       # branches become agent/<agent>-task-<id>
 worktree_dir = ".hq/worktrees"
 
 [kanban]
@@ -275,10 +275,10 @@ extra_binds = []               # extra RW binds (absolute paths)
 extra_ro_binds = []            # extra read-only binds
 
 [bash]
-# Appended to the built-in defaults (see config/project.ts).
-# allow_prefixes: commands allowed through the gate
-# deny_patterns: regex blocked even when matching a prefix
-allow_prefixes = ["docker compose "]
+# Merged with the built-in defaults (see config/project.ts).
+# allow_prefixes: extra commands to allow (added on top of the built-ins)
+# deny_patterns: regex blocked even when matching an allowed prefix
+allow_prefixes = ["cargo "]
 deny_patterns = ["rm -rf /"]
 
 [[goals]]
@@ -874,7 +874,7 @@ SOUL: see [templates](#soulmd-templates).
    it next heartbeat, creates a task under goal `ship-mobile-v1`:
    "Retry signup request with exponential backoff on network failure".
 2. `nora` → `promote_task` → `todo` → `send_message(to="kenji")`.
-3. `kenji` claims on branch `agent/kenji/task-<id>`, implements the
+3. `kenji` claims on branch `agent/kenji-task-<id>`, implements the
    retry, tests on both simulators, `submit_for_review`.
 4. Event trigger wakes `sandor` right away (no waiting for next tick).
    He reads the diff, notices the retry has no jitter. `changes_requested`
