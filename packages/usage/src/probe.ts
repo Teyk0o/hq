@@ -27,30 +27,36 @@ function sleep(ms: number): Promise<void> {
  */
 export async function probeUsageViaTmux(options: { timeoutMs?: number } = {}): Promise<UsageSnapshot> {
   const session = `hq-usage-probe-${process.pid}-${Date.now()}`;
-  const timeout = options.timeoutMs ?? 15_000;
+  const timeoutMs = options.timeoutMs ?? 15_000;
 
-  try {
-    const created = await run(['new-session', '-d', '-s', session, '-x', '220', '-y', '60']);
-    if (created.code !== 0) throw new Error(`tmux new-session failed: ${created.stderr}`);
+  const probe = async (): Promise<UsageSnapshot> => {
+    try {
+      const created = await run(['new-session', '-d', '-s', session, '-x', '220', '-y', '60']);
+      if (created.code !== 0) throw new Error(`tmux new-session failed: ${created.stderr}`);
 
-    await run(['send-keys', '-t', session, 'claude', 'Enter']);
-    // Give Claude a chance to start its TUI.
-    await sleep(4000);
+      await run(['send-keys', '-t', session, 'claude', 'Enter']);
+      // Give Claude a chance to start its TUI.
+      await sleep(4000);
 
-    await run(['send-keys', '-t', session, '/usage', 'Enter']);
-    await sleep(3500);
+      await run(['send-keys', '-t', session, '/usage', 'Enter']);
+      await sleep(3500);
 
-    // Capture the full scrollback so nothing is missed.
-    const captured = await run(['capture-pane', '-t', session, '-p', '-S', '-200']);
-    if (captured.code !== 0) throw new Error(`tmux capture-pane failed: ${captured.stderr}`);
+      // Capture the full scrollback so nothing is missed.
+      const captured = await run(['capture-pane', '-t', session, '-p', '-S', '-200']);
+      if (captured.code !== 0) throw new Error(`tmux capture-pane failed: ${captured.stderr}`);
 
-    const snap = parseUsageOutput(captured.stdout);
-    if (!snap) throw new Error('could not parse /usage output');
-    void timeout;
-    return snap;
-  } finally {
-    await run(['kill-session', '-t', session]).catch(() => undefined);
-  }
+      const snap = parseUsageOutput(captured.stdout);
+      if (!snap) throw new Error('could not parse /usage output');
+      return snap;
+    } finally {
+      await run(['kill-session', '-t', session]).catch(() => undefined);
+    }
+  };
+
+  const timer = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`probe timed out after ${timeoutMs}ms`)), timeoutMs),
+  );
+  return Promise.race([probe(), timer]);
 }
 
 /**
