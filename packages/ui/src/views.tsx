@@ -1428,12 +1428,51 @@ const SettingRow: FC<{ label: string; value: string | number | boolean }> = ({
   </div>
 );
 
-/**
- * Read-only settings page: shows the parsed, post-defaults view of the
- * project's project.toml so the operator can verify what the daemon is
- * actually using. Editing is deliberately out of scope for MVP — the TOML
- * file is the canonical source and editing it preserves comments.
- */
+const SettingInput: FC<{ label: string; name: string; value: string | number; type?: string }> = ({
+  label, name, value, type = 'text',
+}) => (
+  <div class="flex items-center justify-between gap-4 py-2 border-b border-soft last:border-b-0">
+    <label class="text-[13px] text-muted shrink-0" for={name}>{label}</label>
+    <input
+      id={name}
+      name={name}
+      type={type}
+      value={String(value)}
+      class="field text-[13px] mono text-right"
+      style="width:160px;min-width:0"
+    />
+  </div>
+);
+
+const SettingSelect: FC<{ label: string; name: string; value: string; options: string[] }> = ({
+  label, name, value, options,
+}) => (
+  <div class="flex items-center justify-between gap-4 py-2 border-b border-soft last:border-b-0">
+    <label class="text-[13px] text-muted shrink-0" for={name}>{label}</label>
+    <select id={name} name={name} class="field text-[13px] mono" style="width:160px;min-width:0">
+      {options.map((o) => (
+        <option value={o} selected={o === value}>{o}</option>
+      ))}
+    </select>
+  </div>
+);
+
+const SettingCheckbox: FC<{ label: string; name: string; checked: boolean }> = ({
+  label, name, checked,
+}) => (
+  <div class="flex items-center justify-between gap-4 py-2 border-b border-soft last:border-b-0">
+    <label class="text-[13px] text-muted" for={name}>{label}</label>
+    <input
+      id={name}
+      name={name}
+      type="checkbox"
+      value="true"
+      checked={checked}
+      class="w-4 h-4 accent-[color:var(--accent)]"
+    />
+  </div>
+);
+
 export const SettingsPage: FC<{
   project: string;
   config: {
@@ -1460,16 +1499,25 @@ export const SettingsPage: FC<{
     goals: unknown[];
   };
   tomlPath: string;
-}> = ({ config, tomlPath }) => (
-  <div class="max-w-3xl grid gap-5">
+}> = ({ project, config, tomlPath }) => (
+  <form
+    hx-patch={`/api/config/project?project=${project}`}
+    hx-swap="none"
+    class="max-w-3xl grid gap-5"
+  >
     <section class="card p-5">
       <div class="flex items-center gap-2 mb-3">
         <i data-lucide="settings"></i>
         <h2 class="text-[16px] font-semibold">Project</h2>
       </div>
       <SettingRow label="Name" value={config.project.name} />
-      <SettingRow label="Default model" value={config.project.default_model} />
-      <SettingRow label="Default branch" value={config.project.default_branch} />
+      <SettingSelect
+        label="Default model"
+        name="project_default_model"
+        value={config.project.default_model}
+        options={['opus', 'sonnet', 'haiku']}
+      />
+      <SettingInput label="Default branch" name="project_default_branch" value={config.project.default_branch} />
     </section>
 
     <section class="card p-5">
@@ -1477,10 +1525,10 @@ export const SettingsPage: FC<{
         <i data-lucide="timer"></i>
         <h2 class="text-[16px] font-semibold">Scheduler</h2>
       </div>
-      <SettingRow label="Interval (minutes)" value={config.scheduler.interval_minutes} />
-      <SettingRow label="Stagger (seconds)" value={config.scheduler.stagger_seconds} />
-      <SettingRow label="Max concurrent agents" value={config.scheduler.max_concurrent_agents} />
-      <SettingRow label="Daily token budget" value={config.scheduler.daily_token_budget} />
+      <SettingInput label="Interval (minutes)" name="scheduler_interval_minutes" value={config.scheduler.interval_minutes} type="number" />
+      <SettingInput label="Stagger (seconds)" name="scheduler_stagger_seconds" value={config.scheduler.stagger_seconds} type="number" />
+      <SettingInput label="Max concurrent agents" name="scheduler_max_concurrent_agents" value={config.scheduler.max_concurrent_agents} type="number" />
+      <SettingInput label="Daily token budget" name="scheduler_daily_token_budget" value={config.scheduler.daily_token_budget} type="number" />
     </section>
 
     <section class="card p-5">
@@ -1488,9 +1536,9 @@ export const SettingsPage: FC<{
         <i data-lucide="heart-pulse"></i>
         <h2 class="text-[16px] font-semibold">Heartbeat</h2>
       </div>
-      <SettingRow label="Timeout (minutes)" value={config.heartbeat.default_timeout_minutes} />
-      <SettingRow label="Session max (hours)" value={config.heartbeat.max_session_hours} />
-      <SettingRow label="Retry max" value={config.heartbeat.retry_max} />
+      <SettingInput label="Timeout (minutes)" name="heartbeat_default_timeout_minutes" value={config.heartbeat.default_timeout_minutes} type="number" />
+      <SettingInput label="Session max (hours)" name="heartbeat_max_session_hours" value={config.heartbeat.max_session_hours} type="number" />
+      <SettingInput label="Retry max" name="heartbeat_retry_max" value={config.heartbeat.retry_max} type="number" />
     </section>
 
     <section class="card p-5">
@@ -1498,9 +1546,9 @@ export const SettingsPage: FC<{
         <i data-lucide="check-check"></i>
         <h2 class="text-[16px] font-semibold">Review gate</h2>
       </div>
-      <SettingRow label="Min reviewers" value={config.kanban.min_reviewers} />
-      <SettingRow label="Require lint pre-review" value={config.kanban.require_lint_before_review} />
-      <SettingRow label="Require typecheck pre-review" value={config.kanban.require_typecheck_before_review} />
+      <SettingInput label="Min reviewers" name="kanban_min_reviewers" value={config.kanban.min_reviewers} type="number" />
+      <SettingCheckbox label="Require lint pre-review" name="kanban_require_lint_before_review" checked={config.kanban.require_lint_before_review} />
+      <SettingCheckbox label="Require typecheck pre-review" name="kanban_require_typecheck_before_review" checked={config.kanban.require_typecheck_before_review} />
     </section>
 
     <section class="card p-5">
@@ -1508,16 +1556,10 @@ export const SettingsPage: FC<{
         <i data-lucide="shield"></i>
         <h2 class="text-[16px] font-semibold">Sandbox & webhooks</h2>
       </div>
-      <SettingRow label="Sandbox enabled" value={config.sandbox.enabled} />
-      <SettingRow label="Sandbox network" value={config.sandbox.share_net ? 'shared' : 'isolated'} />
-      <SettingRow
-        label="Discord webhook"
-        value={config.webhook.discord_url ? '(set)' : '(not set)'}
-      />
-      <SettingRow
-        label="Discord events"
-        value={config.webhook.discord_events.join(', ') || '(none)'}
-      />
+      <SettingCheckbox label="Sandbox enabled" name="sandbox_enabled" checked={config.sandbox.enabled} />
+      <SettingCheckbox label="Share network" name="sandbox_share_net" checked={config.sandbox.share_net} />
+      <SettingInput label="Discord webhook URL" name="webhook_discord_url" value={config.webhook.discord_url} />
+      <SettingInput label="Discord events (comma-sep.)" name="webhook_discord_events" value={config.webhook.discord_events.join(', ')} />
     </section>
 
     <section class="card p-5">
@@ -1527,13 +1569,20 @@ export const SettingsPage: FC<{
       </div>
       <SettingRow label="Rules defined" value={config.rules.length} />
       <SettingRow label="Goals defined" value={config.goals.length} />
+      <p class="text-[12px] text-faint mt-3">
+        Manage rules and goals directly in <span class="mono">{tomlPath}</span>.
+      </p>
     </section>
 
-    <p class="text-[12px] text-faint">
-      Editing is done by hand in <span class="mono">{tomlPath}</span>. The
-      daemon re-reads project.toml on each scheduler tick.
-    </p>
-  </div>
+    <div class="flex items-center justify-between">
+      <button type="submit" class="btn btn-primary">
+        <i data-lucide="save"></i> Save changes
+      </button>
+      <p class="text-[12px] text-faint">
+        Saved config is picked up on the next scheduler tick.
+      </p>
+    </div>
+  </form>
 );
 
 export const SidebarAgents: FC<{
