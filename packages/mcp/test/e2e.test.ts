@@ -185,7 +185,7 @@ describe('e2e: peer-review gate auto-promotes to review', () => {
   });
 });
 
-describe('e2e: changes_requested kicks the task back to in_progress', () => {
+describe('e2e: changes_requested kicks the task back to todo', () => {
   let proj: E2EProject;
   let taskId: string;
 
@@ -225,7 +225,7 @@ describe('e2e: changes_requested kicks the task back to in_progress', () => {
       const row = db.prepare(`SELECT status FROM tasks WHERE id = ?`).get(taskId) as {
         status: string;
       };
-      expect(row.status).toBe('in_progress');
+      expect(row.status).toBe('todo');
       db.close();
     } finally {
       await bob.close();
