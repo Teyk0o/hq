@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+export const BASH_DEFAULT_ALLOW_PREFIXES: string[] = [
+  'git ', 'make ', 'bun ', 'npm ', 'pnpm ', 'node ', 'tsc',
+  'ls', 'cat ', 'grep ', 'rg ', 'find ', 'mkdir ', 'touch ',
+  'echo ', 'cp ', 'mv ', 'sed ', 'awk ', 'head ', 'tail ',
+  'which ', 'pwd', 'env', 'diff ', 'cd ', 'test ', 'wc ',
+  'sort ', 'uniq ', 'cut ', 'tr ', 'xargs ', 'printf ',
+  'true', 'false', 'date',
+];
+
 export const ProjectConfigSchema = z.object({
   project: z.object({
     name: z.string().min(1),
@@ -53,14 +62,7 @@ export const ProjectConfigSchema = z.object({
     .object({
       allow_prefixes: z
         .array(z.string())
-        .default([
-          'git ', 'make ', 'bun ', 'npm ', 'pnpm ', 'node ', 'tsc',
-          'ls', 'cat ', 'grep ', 'rg ', 'find ', 'mkdir ', 'touch ',
-          'echo ', 'cp ', 'mv ', 'sed ', 'awk ', 'head ', 'tail ',
-          'which ', 'pwd', 'env', 'diff ', 'cd ', 'test ', 'wc ',
-          'sort ', 'uniq ', 'cut ', 'tr ', 'xargs ', 'printf ',
-          'true', 'false', 'date',
-        ]),
+        .default(BASH_DEFAULT_ALLOW_PREFIXES),
       deny_patterns: z
         .array(z.string())
         .default([
