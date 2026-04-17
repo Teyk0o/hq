@@ -106,7 +106,7 @@ function buildProtocolSteps(ctx: HeartbeatPromptContext): string[] {
     steps.push(
       `  ${n++}. UNBLOCK PHASE: recheck blocked tasks if you have any.`,
       `  ${n++}. WORK PHASE: claim_task on a suitable todo, do the work, commit to branch`,
-      `       agent/${ctx.agentName}/task-<id>, then submit_for_review.`,
+      `       agent/${ctx.agentName}-task-<id>, then submit_for_review.`,
     );
   }
   if (ctx.capabilities.can_create_tasks) {

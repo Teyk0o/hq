@@ -98,7 +98,7 @@ export async function claimTask(ctx: McpContext, input: { id: string }) {
     preTask.package &&
     ctx.scopePackages.length > 0 &&
     !ctx.scopePackages.includes('*') &&
-    !ctx.scopePackages.includes(preTask.package)
+    !scopeMatches(preTask.package, ctx.scopePackages)
   ) {
     throw new McpError(
       'out_of_scope',
@@ -127,7 +127,7 @@ export async function claimTask(ctx: McpContext, input: { id: string }) {
   // Stamp the expected branch name on the task at claim time. submitForReview
   // will verify the actual git state matches this. branch_prefix is already
   // normalised (defaults to "agent/").
-  const expectedBranch = `${ctx.projectConfig.git.branch_prefix}${ctx.agentName}/task-${input.id}`;
+  const expectedBranch = `${ctx.projectConfig.git.branch_prefix}${ctx.agentName}-task-${input.id}`;
   const claimed = ctx.db.transaction((tx) => {
     tx.update(tasksTable)
       .set({
@@ -339,5 +339,18 @@ export async function promoteTask(ctx: McpContext, input: { id: string }) {
     by: ctx.agentName,
   });
   return { ok: true };
+}
+
+/**
+ * Check whether a task's package label falls within an agent's scope list.
+ * Exact match is tried first; then we strip common file extensions (.rs, .ts,
+ * .py, .js, .go, etc.) and retry, so a task tagged "planet.rs" matches a
+ * scope entry "planet". Multi-file labels like "coarse.rs + chunk.rs" are
+ * split on whitespace/commas and each token is checked.
+ */
+function scopeMatches(taskPackage: string, scopePackages: string[]): boolean {
+  if (scopePackages.includes(taskPackage)) return true;
+  const tokens = taskPackage.split(/[\s,+]+/).map((t) => t.replace(/\.[a-z]{1,4}$/, '').toLowerCase());
+  return tokens.some((t) => t && scopePackages.some((s) => s.toLowerCase() === t));
 }
 
