@@ -104,6 +104,14 @@ export class Scheduler {
       max_concurrent: cfg.scheduler.max_concurrent_agents,
     });
 
+    // Fire an immediate tick so agents (especially the boss) don't have to
+    // wait up to `interval_minutes` before their first heartbeat.
+    setTimeout(() => {
+      if (!isQuotaPaused?.()) {
+        void this.runTick(project, db, cfg.scheduler.max_concurrent_agents, stagger);
+      }
+    }, 3000);
+
     // Separate reaper tick (every minute) for stale heartbeats.
     const reaper = new Cron('* * * * *', { paused: false }, async () => {
       await reapStaleHeartbeats(
