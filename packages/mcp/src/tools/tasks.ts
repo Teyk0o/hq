@@ -350,7 +350,11 @@ export async function promoteTask(ctx: McpContext, input: { id: string }) {
  */
 function scopeMatches(taskPackage: string, scopePackages: string[]): boolean {
   if (scopePackages.includes(taskPackage)) return true;
-  const tokens = taskPackage.split(/[\s,+]+/).map((t) => t.replace(/\.[a-z]{1,4}$/, '').toLowerCase());
-  return tokens.some((t) => t && scopePackages.some((s) => s.toLowerCase() === t));
+  // Normalise each token: strip path prefix (src/, lib/, …) and file extension.
+  const normalize = (t: string) =>
+    t.replace(/\.[a-z]{1,4}$/, '').replace(/^.*\//, '').toLowerCase();
+  const tokens = taskPackage.split(/[\s,+]+/).map(normalize).filter(Boolean);
+  const scopes = scopePackages.map((s) => s.toLowerCase());
+  return tokens.some((t) => scopes.some((s) => s === t || t.includes(s) || s.includes(t)));
 }
 
