@@ -14,7 +14,7 @@ export const ROLE_CAPABILITIES: Record<AgentRole, AgentCapabilities> = {
   },
   worker: {
     can_claim_tasks: true,
-    can_review: true,
+    can_review: false,
     can_promote_tasks: false,
     can_create_tasks: false,
     can_write_files: true,

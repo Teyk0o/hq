@@ -121,7 +121,12 @@ describe('capability: author cannot review their own task', () => {
         `INSERT INTO tasks (id, title, created_by, status, priority, assignee) VALUES ('t3', 'x', 'human', 'peer_review', 3, 'alice')`,
       )
       .run();
-    // Upgrade alice to also have can_review (matching our default worker role).
+    // Workers no longer have can_review by default; give alice the capability
+    // explicitly so this test focuses on the self_review guard, not the capability guard.
+    const tomlPath = `${proj.root}/.hq/agents/alice.toml`;
+    const { readFileSync, writeFileSync } = require('node:fs');
+    const current = readFileSync(tomlPath, 'utf-8');
+    writeFileSync(tomlPath, current + '\n[capabilities]\ncan_review = true\n', 'utf-8');
   });
   afterAll(() => proj.cleanup());
 
