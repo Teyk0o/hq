@@ -1,6 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import { Database } from 'bun:sqlite';
 import { existsSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Hono } from 'hono';
@@ -18,6 +19,7 @@ import {
   GoalsPage,
   HeartbeatReplay,
   Inbox,
+  InboxMessages,
   MetricsPage,
   MultiProjectView,
   Kanban,
@@ -529,10 +531,15 @@ export function createApp(options: UiServerOptions): Hono {
   app.post('/api/agents/:name/pause', (c) => {
     const name = c.req.param('name');
     const project = currentProject(c.req.raw);
-    // Accept pause from any state except archived. When the agent is
-    // currently 'working', the MCP's end_heartbeat will land on 'paused'
-    // instead of 'idle' because we set the target state here first and
-    // runner.ts guards against re-triggering paused agents.
+    // Send Ctrl+C to the running session before updating status so the
+    // in-flight heartbeat is interrupted rather than completing naturally.
+    const db = openDb(project);
+    const state = db
+      .prepare(`SELECT tmux_session FROM agent_state WHERE name = ?`)
+      .get(name) as { tmux_session: string | null } | undefined;
+    if (state?.tmux_session) {
+      spawnSync('tmux', ['send-keys', '-t', state.tmux_session, 'C-c'], { stdio: 'ignore' });
+    }
     const ok = mutateAgent(project, name, (s) =>
       s !== 'archived' ? { status: 'paused' } : null,
     );
@@ -757,10 +764,8 @@ export function createApp(options: UiServerOptions): Hono {
     );
   });
 
-  app.get('/inbox', async (c) => {
-    const project = currentProject(c.req.raw);
-    const db = openDb(project);
-    const messages = db
+  const fetchInboxMessages = (project: string) =>
+    openDb(project)
       .prepare(
         'SELECT id, from_agent, to_agent, subject, body, created_at, read_at FROM messages ORDER BY created_at DESC LIMIT 200',
       )
@@ -773,19 +778,32 @@ export function createApp(options: UiServerOptions): Hono {
       created_at: number;
       read_at: number | null;
     }>;
-    // Mark all messages (to human or broadcast) as read when the user opens
-    // the inbox. Agent-directed messages are marked read when the agent's
-    // MCP read_messages tool is called.
+
+  app.get('/inbox', async (c) => {
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const messages = fetchInboxMessages(project);
     db.prepare(
       `UPDATE messages SET read_at = ? WHERE read_at IS NULL AND (to_agent = '*' OR to_agent = 'human')`,
     ).run(Date.now());
-    // db pooled — no close
     const agents = await loadAgentPresentations(project);
     return c.html(
       <Layout project={project} projects={projectNames} title="Inbox" page="inbox">
         <Inbox messages={messages} agents={agents} project={project} />
       </Layout>,
     );
+  });
+
+  // Partial refresh — returns just the messages list HTML, used by SSE trigger.
+  app.get('/inbox/messages', async (c) => {
+    const project = currentProject(c.req.raw);
+    const db = openDb(project);
+    const messages = fetchInboxMessages(project);
+    db.prepare(
+      `UPDATE messages SET read_at = ? WHERE read_at IS NULL AND (to_agent = '*' OR to_agent = 'human')`,
+    ).run(Date.now());
+    const agents = await loadAgentPresentations(project);
+    return c.html(<InboxMessages messages={messages} agents={agents} />);
   });
 
   // Unread count for the sidebar badge — broadcasts and messages directly
@@ -1205,9 +1223,12 @@ export function createApp(options: UiServerOptions): Hono {
     const project = currentProject(c.req.raw);
     const db = openDb(project);
     const agents = db
-      .prepare(`SELECT name FROM agent_state WHERE status NOT IN ('archived', 'paused', 'paused_quota')`)
-      .all() as Array<{ name: string }>;
-    for (const { name } of agents) {
+      .prepare(`SELECT name, tmux_session FROM agent_state WHERE status NOT IN ('archived', 'paused', 'paused_quota')`)
+      .all() as Array<{ name: string; tmux_session: string | null }>;
+    for (const { name, tmux_session } of agents) {
+      if (tmux_session) {
+        spawnSync('tmux', ['send-keys', '-t', tmux_session, 'C-c'], { stdio: 'ignore' });
+      }
       db.prepare(`UPDATE agent_state SET status = 'paused' WHERE name = ?`).run(name);
       bus.publish({ type: 'agent.status_changed', agent: name, status: 'paused' });
     }
