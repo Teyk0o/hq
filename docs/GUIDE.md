@@ -235,7 +235,7 @@ resume_threshold_pct = 70
 [project]
 name = "myproject"
 root = "."
-default_model = "sonnet"       # opus | sonnet | haiku
+default_model = "sonnet"       # sonnet is a good default; see model selection below
 default_branch = "main"
 
 [scheduler]
@@ -315,7 +315,7 @@ forbid_commands = ["curl .*\\| *sh", "dd if=", "mkfs"]
 [agent]
 name = "lucas"
 role = "worker"                # worker | reviewer | boss | readonly
-model = "sonnet"               # overrides project default_model
+model = "sonnet"               # opus (boss) | sonnet (worker/reviewer) | haiku (readonly)
 soul = "lucas.md"              # path relative to .hq/agents/ or .hq/soul/
 active = true
 readonly_strict = false        # force-refuse every edit at the hook level
@@ -362,12 +362,18 @@ specialty comes from three places, not from the `role` field:
 3. **`[[rules]] owner`** in `project.toml` — hard enforcement of
    ownership on specific paths.
 
-| Role | Defaults | What it controls |
-|---|---|---|
-| `worker` | claim, commit, review | Can pick up and finish tasks |
-| `reviewer` | review only | Can peer-review, cannot claim |
-| `boss` | create/promote tasks, review | Can plan and shape the backlog |
-| `readonly` | read only | Can observe, comment, message — never writes |
+| Role | Defaults | What it controls | Recommended model |
+|---|---|---|---|
+| `worker` | claim, commit, review | Can pick up and finish tasks | `sonnet` |
+| `reviewer` | review only | Can peer-review, cannot claim | `sonnet` |
+| `boss` | create/promote tasks, review | Can plan and shape the backlog | `opus` |
+| `readonly` | read only | Can observe, comment, message — never writes | `haiku` |
+
+**Model selection by role** — set `model` in `agent.toml` to override the project default:
+
+- **`opus`** — reserve for the boss. Planning, goal decomposition, and backlog management benefit from Opus's reasoning depth. One boss per project means one Opus session at a time, keeping cost manageable.
+- **`sonnet`** — the right default for workers and reviewers. Strong enough to write, refactor, and review production code; cost-effective at scale.
+- **`haiku`** — use for readonly agents (auditors, observers). They only read and comment, so Sonnet's full capacity is wasted on them. Haiku handles the load at a fraction of the cost.
 
 Exact per-role capabilities live in
 `packages/core/src/domain/capabilities.ts`. Override per agent under
@@ -537,7 +543,7 @@ action = "block"
 name = "nora"
 role = "boss"
 soul = "nora.md"
-model = "opus"                 # planning benefits from Opus
+model = "opus"                 # boss: Opus for planning depth
 gender = "female"
 ```
 
@@ -583,6 +589,7 @@ Protocol:
 name = "alex"
 role = "worker"
 soul = "alex.md"
+model = "sonnet"
 gender = "neutral"
 
 [scope]
@@ -626,6 +633,7 @@ Heartbeat protocol:
 name = "sofia"
 role = "worker"
 soul = "sofia.md"
+model = "sonnet"
 gender = "female"
 
 [scope]
@@ -667,6 +675,7 @@ Protocol:
 name = "kenji"
 role = "worker"
 soul = "kenji.md"
+model = "sonnet"
 gender = "male"
 
 [scope]
@@ -707,6 +716,7 @@ Protocol:
 name = "mira"
 role = "worker"
 soul = "mira.md"
+model = "sonnet"
 gender = "female"
 
 [scope]
@@ -748,6 +758,7 @@ Protocol:
 name = "iris"
 role = "worker"
 soul = "iris.md"
+model = "sonnet"
 gender = "female"
 
 [scope]
@@ -793,6 +804,7 @@ Protocol:
 name = "zoe"
 role = "worker"
 soul = "zoe.md"
+model = "sonnet"
 gender = "female"
 
 [scope]
@@ -833,6 +845,7 @@ Protocol:
 name = "sandor"
 role = "reviewer"
 soul = "sandor.md"
+model = "sonnet"
 gender = "male"
 ```
 
@@ -848,6 +861,7 @@ your explicit approval before she applies".
 name = "thomas"
 role = "readonly"
 soul = "thomas.md"
+model = "haiku"                 # readonly: Haiku is sufficient and cost-efficient
 readonly_strict = true          # belt AND braces
 gender = "male"
 ```

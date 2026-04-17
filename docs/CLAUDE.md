@@ -87,6 +87,11 @@ hq agent new bob   --role reviewer --gender male
 hq agent new morgane --role boss --gender female
 ```
 
+**Model selection** — set `model` in each agent's `.toml` to override the project default:
+- **`opus`** — boss only. Planning and goal decomposition need its reasoning depth.
+- **`sonnet`** — all workers and reviewers. Strong enough for production code; cost-effective at scale.
+- **`haiku`** — readonly agents. They only read and comment; Sonnet's capacity is overkill.
+
 **The 4 roles are capability buckets, not job titles.** You model a
 "backend engineer" or a "frontend engineer" or a "DevOps" by:
 
@@ -363,17 +368,17 @@ design/                         infra/
 
 ### Who does what
 
-| Agent | Role | Scope | Specialty |
-|---|---|---|---|
-| `nora` | boss | — | CTO+PM, plans goals → tasks, routes via `send_message`. Opus. |
-| `alex` | worker | `api`, `db` | Senior backend (REST, schema, migrations). |
-| `sofia` | worker | `web`, `ui` | Senior frontend web (Next.js, design-system impl). |
-| `kenji` | worker | `mobile` | Mobile (React Native, iOS + Android). |
-| `mira` | worker | `infra` | Platform / DevOps (terraform, CI, observability). |
-| `iris` | worker | `design`, `ui`, `marketing` | Product designer (tokens, assets, copy decks). |
-| `zoe` | worker | `marketing` | Marketing / content (landing, pricing, blog, SEO). |
-| `sandor` | reviewer | — | Devil's advocate reviewer. |
-| `thomas` | readonly | — | QA auditor, comments only. |
+| Agent | Role | Model | Scope | Specialty |
+|---|---|---|---|---|
+| `nora` | boss | **opus** | — | CTO+PM, plans goals → tasks, routes via `send_message`. |
+| `alex` | worker | sonnet | `api`, `db` | Senior backend (REST, schema, migrations). |
+| `sofia` | worker | sonnet | `web`, `ui` | Senior frontend web (Next.js, design-system impl). |
+| `kenji` | worker | sonnet | `mobile` | Mobile (React Native, iOS + Android). |
+| `mira` | worker | sonnet | `infra` | Platform / DevOps (terraform, CI, observability). |
+| `iris` | worker | sonnet | `design`, `ui`, `marketing` | Product designer (tokens, assets, copy decks). |
+| `zoe` | worker | sonnet | `marketing` | Marketing / content (landing, pricing, blog, SEO). |
+| `sandor` | reviewer | sonnet | — | Devil's advocate reviewer. |
+| `thomas` | readonly | **haiku** | — | QA auditor, comments only. |
 
 Note: `iris` and `sofia` **both** have `ui` in their scope. Iris edits
 tokens and assets; sofia implements the React components. There's no
