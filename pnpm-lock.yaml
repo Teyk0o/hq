@@ -13,7 +13,7 @@ importers:
         version: 1.9.4
       '@types/bun':
         specifier: latest
-        version: 1.3.12
+        version: 1.3.13
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -40,7 +40,7 @@ importers:
         version: 12.1.0
       drizzle-orm:
         specifier: ^0.36.0
-        version: 0.36.4(bun-types@1.3.12)
+        version: 0.36.4(bun-types@1.3.13)
       smol-toml:
         specifier: ^1.3.0
         version: 1.6.1
@@ -49,7 +49,7 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: ^0.36.0
-        version: 0.36.4(bun-types@1.3.12)
+        version: 0.36.4(bun-types@1.3.13)
       nanoid:
         specifier: ^5.0.7
         version: 5.1.9
@@ -80,7 +80,7 @@ importers:
         version: 8.1.2
       drizzle-orm:
         specifier: ^0.36.0
-        version: 0.36.4(bun-types@1.3.12)
+        version: 0.36.4(bun-types@1.3.13)
 
   packages/mcp:
     dependencies:
@@ -92,7 +92,7 @@ importers:
         version: 1.29.0(zod@3.25.76)
       drizzle-orm:
         specifier: ^0.36.0
-        version: 0.36.4(bun-types@1.3.12)
+        version: 0.36.4(bun-types@1.3.13)
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -112,8 +112,8 @@ importers:
         specifier: workspace:*
         version: link:../usage
       hono:
-        specifier: ^4.6.0
-        version: 4.12.14
+        specifier: ^4.12.16
+        version: 4.12.16
       smol-toml:
         specifier: ^1.3.0
         version: 1.6.1
@@ -479,11 +479,11 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
-  '@types/bun@1.3.12':
-    resolution: {integrity: sha512-DBv81elK+/VSwXHDlnH3Qduw+KxkTIWi7TXkAeh24zpi5l0B2kUg9Ga3tb4nJaPcOFswflgi/yAvMVBPrxMB+A==}
+  '@types/bun@1.3.13':
+    resolution: {integrity: sha512-9fqXWk5YIHGGnUau9TEi+qdlTYDAnOj+xLCmSTwXfAIqXr2x4tytJb43E9uCvt09zJURKXwAtkoH4nLQfzeTXw==}
 
-  '@types/node@25.6.0':
-    resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
+  '@types/node@25.6.2':
+    resolution: {integrity: sha512-sokuT28dxf9JT5Kady1fsXOvI4HVpjZa95NKT5y9PNTIrs2AsobR4GFAA90ZG8M+nxVRLysCXsVj6eGC7Vbrlw==}
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -507,8 +507,8 @@ packages:
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
 
-  bun-types@1.3.12:
-    resolution: {integrity: sha512-HqOLj5PoFajAQciOMRiIZGNoKxDJSr6qigAttOX40vJuSp6DN/CxWp9s3C1Xwm4oH7ybueITwiaOcWXoYVoRkA==}
+  bun-types@1.3.13:
+    resolution: {integrity: sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA==}
 
   bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
@@ -772,6 +772,10 @@ packages:
 
   hono@4.12.14:
     resolution: {integrity: sha512-am5zfg3yu6sqn5yjKBNqhnTX7Cv+m00ox+7jbaKkrLMRJ4rAdldd1xPd/JzbBWspqaQv6RSTrgFN95EsfhC+7w==}
+    engines: {node: '>=16.9.0'}
+
+  hono@4.12.16:
+    resolution: {integrity: sha512-jN0ZewiNAWSe5khM3EyCmBb250+b40wWbwNILNfEvq84VREWwOIkuUsFONk/3i3nqkz7Oe1PcpM2mwQEK2L9Kg==}
     engines: {node: '>=16.9.0'}
 
   http-errors@2.0.1:
@@ -1200,11 +1204,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@types/bun@1.3.12':
+  '@types/bun@1.3.13':
     dependencies:
-      bun-types: 1.3.12
+      bun-types: 1.3.13
 
-  '@types/node@25.6.0':
+  '@types/node@25.6.2':
     dependencies:
       undici-types: 7.19.2
 
@@ -1240,9 +1244,9 @@ snapshots:
 
   buffer-from@1.1.2: {}
 
-  bun-types@1.3.12:
+  bun-types@1.3.13:
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 25.6.2
 
   bytes@3.1.2: {}
 
@@ -1294,9 +1298,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.36.4(bun-types@1.3.12):
+  drizzle-orm@0.36.4(bun-types@1.3.13):
     optionalDependencies:
-      bun-types: 1.3.12
+      bun-types: 1.3.13
 
   dunder-proto@1.0.1:
     dependencies:
@@ -1474,6 +1478,8 @@ snapshots:
       function-bind: 1.1.2
 
   hono@4.12.14: {}
+
+  hono@4.12.16: {}
 
   http-errors@2.0.1:
     dependencies:
